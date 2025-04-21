@@ -9,7 +9,7 @@
         "program": "${workspaceFolder}/server.js",
         "runtimeArgs": ["--nolazy"],
         "env": {
-          "PORT": "3000"
+          "PORT": "3001"
         }
       }
     ]
