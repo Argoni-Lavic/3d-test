@@ -5,6 +5,10 @@ let keys = {};
 let velocity = new THREE.Vector3();
 let moveSpeed = 0.1;
 let pitch = 0;
+let isFlying = false;
+let yVelocity = 0;
+let onGround = true;
+
 
 function init() {
   // Scene and Renderer
@@ -38,8 +42,19 @@ function init() {
     document.body.requestPointerLock();
   });
   document.addEventListener('mousemove', onMouseMove);
-  document.addEventListener('keydown', (e) => keys[e.code] = true);
-  document.addEventListener('keyup', (e) => keys[e.code] = false);
+  document.addEventListener('keydown', (e) => {
+    keys[e.code] = true;
+  
+    if (e.code === 'KeyF') {
+      isFlying = !isFlying;
+      console.log('Fly mode:', isFlying ? 'ON' : 'OFF');
+    }
+  });
+  
+  document.addEventListener('keyup', (e) => {
+    keys[e.code] = false;
+  });
+  
 
   animate();
 }
@@ -56,26 +71,56 @@ function onMouseMove(e) {
 function animate() {
   requestAnimationFrame(animate);
 
-  // Movement
   velocity.set(0, 0, 0);
-  if (keys['KeyW']) velocity.z += 1;
-  if (keys['KeyS']) velocity.z -= 1;
-  if (keys['KeyA']) velocity.x += 1;
-  if (keys['KeyD']) velocity.x -= 1;
+
+  if (keys['KeyW']) velocity.z -= 1;
+  if (keys['KeyS']) velocity.z += 1;
+  if (keys['KeyA']) velocity.x -= 1;
+  if (keys['KeyD']) velocity.x += 1;
+
+  if (isFlying) {
+    if (keys['Space']) velocity.y += 1;
+    if (keys['ShiftLeft'] || keys['ShiftRight']) velocity.y -= 1;
+  }
 
   velocity.normalize().multiplyScalar(moveSpeed);
 
-  const direction = new THREE.Vector3();
-  camera.getWorldDirection(direction);
-  direction.y = 0;
-  direction.normalize();
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  forward.y = 0;
+  forward.normalize();
 
-  const strafe = new THREE.Vector3().crossVectors(camera.up, direction).normalize();
+  const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+  const up = new THREE.Vector3(0, 1, 0);
 
-  cameraHolder.position.add(direction.multiplyScalar(velocity.z));
-  cameraHolder.position.add(strafe.multiplyScalar(velocity.x));
+  // Movement
+  cameraHolder.position.add(forward.multiplyScalar(velocity.z));
+  cameraHolder.position.add(right.multiplyScalar(velocity.x));
+
+  if (isFlying) {
+    cameraHolder.position.add(up.multiplyScalar(velocity.y));
+  } else {
+    // Gravity and jump
+    const groundLevel = 0;
+    if (cameraHolder.position.y > groundLevel + 1.6) {
+      yVelocity -= 0.01; // gravity
+      onGround = false;
+    } else {
+      yVelocity = 0;
+      onGround = true;
+      cameraHolder.position.y = groundLevel + 1.6;
+    }
+
+    if (keys['Space'] && onGround) {
+      yVelocity = 0.2; // jump
+      onGround = false;
+    }
+
+    cameraHolder.position.y += yVelocity;
+  }
 
   renderer.render(scene, camera);
 }
+
 
 init();
