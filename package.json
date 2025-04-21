@@ -1,0 +1,18 @@
+{
+    "name": "canvas-app",
+    "version": "1.0.0",
+    "description": "A p5.js canvas app with Express server",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "express": "^4.21.2"
+    },
+    "devDependencies": {
+        "http-server": "^14.1.1"
+    }
+}
