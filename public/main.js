@@ -1,5 +1,5 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-
+//import { BufferGeometryUtils } from './BufferGeometryUtils.js';
 
 let scene, camera, cameraHolder, renderer;
 let keys = {};
@@ -8,8 +8,8 @@ let moveSpeed = 0.1;
 let pitch = 0;
 let isFlying = false;
 let yVelocity = 0;
-let onGround = true;
-let gridSize = 20; 
+let onGround = false;
+let gridSize = 50; 
 let elevation = 2; 
 let terrain = [];
 let terainOffset = terrain/ 2;
@@ -34,10 +34,12 @@ function init() {
 
   // Camera + Holder
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.y = 1.6;
+  camera.position.y = playerHeight;
   cameraHolder = new THREE.Object3D();
   cameraHolder.add(camera);
   scene.add(cameraHolder);
+
+  cameraHolder.position.y = playerHeight + 2
 
   // Pointer lock
   document.body.addEventListener('click', () => {
@@ -74,8 +76,6 @@ function createGround(){
   for (let x = 0; x < gridSize; x++) {
     terrain[x] = [];
     for (let z = 0; z < gridSize; z++) {
-      // Generate noise value at (x, z)
-      const noiseValue = pseudoNoise(x, z);
       // Normalize the noise to the range [0, 1], then scale to desired height
       terrain[x][z] = Math.floor(pseudoNoise(x, z) * elevation);
     }
