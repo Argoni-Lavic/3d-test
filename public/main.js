@@ -1,26 +1,40 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
+
 let scene, camera, cameraHolder, renderer;
 let keys = {};
+
 let velocity = new THREE.Vector3();
 let moveSpeed = 0.1;
 let pitch = 0;
 let isFlying = false;
 let yVelocity = 0;
 let onGround = false;
-let gridSize = 25;
+
+let gridSize = 1000;
 let chunkSize = 10;
+let chunkMeshes = [];
+let renderDistance = 10;
+
 let elevation = 2; 
 let terrainScale = 0.05;
 let terrainSmoothingFactor = 5;
 let terrain = [];
-let terainOffset = terrain/ 2;
+
 let grassColor = 0x228B22;
 let grassColorVariance = 0.1;
+
 let minimumPlayerY = 0;
 let playerHeight = 1.6;
 
+// Create a texture loader
+const textureLoader = new THREE.TextureLoader();
+
+// Use the URL link for the night sky image
+let skyTexture = textureLoader.load('https://images.unsplash.com/photo-1570284613060-766c33850e00?fm=jpg&q=60&w=3000&ixlib=rb-4.0.3');
+
 function init() {
+
   // Scene and Renderer
   scene = new THREE.Scene();
   renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -34,8 +48,19 @@ function init() {
 
   createGround();
 
-  // Camera + Holder
-  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  // Camera, Holder, and sky
+  // Create a large inverted sphere to act as the sky
+  const skyGeometry = new THREE.SphereGeometry(gridSize * 10, 32, 32);
+  const skyMaterial = new THREE.MeshBasicMaterial({
+  map: skyTexture,        // Apply the night sky texture
+  side: THREE.BackSide,   // Render the inside of the sphere
+  opacity: 0.9,           // Optional: add slight transparency for better blending
+  transparent: true       // Allow transparency if needed
+});
+  const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+  sky.position.set(0, 0, 0);
+  scene.add(sky);
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, gridSize * gridSize);
   camera.position.y = playerHeight;
   cameraHolder = new THREE.Object3D();
   cameraHolder.add(camera);
@@ -77,58 +102,68 @@ function onMouseMove(e) {
 }
 
 function createGround() {
-  const positions = [];
-  const indices = [];
-  const colors = [];
-  let vertexIndex = 0;
-
+  // Generate terrain heights
   for (let x = 0; x < gridSize; x++) {
     terrain[x] = [];
     for (let z = 0; z < gridSize; z++) {
-      const noiseValue = pseudoNoise(x, z); 
-      terrain[x][z] = Math.floor(noiseValue);
+      terrain[x][z] = pseudoNoise(x, z);
     }
   }
 
-  for (let x = 0; x < gridSize - 1; x++) {
-    for (let z = 0; z < gridSize - 1; z++) {
-      const v0 = [x, terrain[x][z], z];
-      const v1 = [x + 1, terrain[x + 1][z], z];
-      const v2 = [x + 1, terrain[x + 1][z + 1], z + 1];
-      const v3 = [x, terrain[x][z + 1], z + 1];
+  
+  for (let chunkX = 0; chunkX < gridSize; chunkX += chunkSize) {
+    for (let chunkZ = 0; chunkZ < gridSize; chunkZ += chunkSize) {
+      const positions = [];
+      const indices = [];
+      const colors = [];
+      let vertexIndex = 0;
 
-      positions.push(...v0, ...v1, ...v2, ...v3);
+      for (let x = chunkX; x < Math.min(chunkX + chunkSize, gridSize - 1); x++) {
+        for (let z = chunkZ; z < Math.min(chunkZ + chunkSize, gridSize - 1); z++) {
+          const v0 = [x, terrain[x][z], z];
+          const v1 = [x + 1, terrain[x + 1][z], z];
+          const v2 = [x + 1, terrain[x + 1][z + 1], z + 1];
+          const v3 = [x, terrain[x][z + 1], z + 1];
 
-      // Color based on average height
-      const quadColor = randomizeColor(grassColor, grassColorVariance);
-for (let i = 0; i < 4; i++) {
-  colors.push(quadColor.r, quadColor.g, quadColor.b);
-}
+          positions.push(...v0, ...v1, ...v2, ...v3);
 
-      indices.push(
-        vertexIndex, vertexIndex + 1, vertexIndex + 2,
-        vertexIndex + 2, vertexIndex + 3, vertexIndex
-      );
+          const quadColor = randomizeColor(grassColor, grassColorVariance);
+          for (let i = 0; i < 4; i++) {
+            colors.push(quadColor.r, quadColor.g, quadColor.b);
+          }
 
-      vertexIndex += 4;
+          indices.push(
+            vertexIndex, vertexIndex + 1, vertexIndex + 2,
+            vertexIndex + 2, vertexIndex + 3, vertexIndex
+          );
+
+          vertexIndex += 4;
+        }
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        flatShading: false,
+        side: THREE.DoubleSide
+      });
+
+      const chunkMesh = new THREE.Mesh(geometry, material);
+      chunkMesh.position.set(chunkX, 0, chunkZ); // ⬅️ key fix
+      geometry.translate(-chunkX, 0, -chunkZ);   // ⬅️ correct for local-space vertices
+
+      scene.add(chunkMesh);
+      chunkMeshes.push(chunkMesh);
+
     }
   }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-
-  const material = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    flatShading: false,
-    side: THREE.DoubleSide
-  });
-
-  const terrainMesh = new THREE.Mesh(geometry, material);
-  scene.add(terrainMesh);
 }
+
 
 
 function randomizeColor(hex, variance = 0.1) {
@@ -282,7 +317,9 @@ function animate() {
       const dy = newGroundLevel - prevGroundLevel;
     
       const horizontalDist = Math.sqrt(dx * dx + dz * dz);
-      if (horizontalDist === 0) return;
+      if (horizontalDist === 0) {
+        horizontalDist = 0.000001;
+      }
     
       const slopeAngle = Math.atan2(Math.abs(dy), horizontalDist) * (180 / Math.PI);
 
@@ -306,9 +343,8 @@ function animate() {
       }  
     }
     cameraHolder.position.y += yVelocity;
-    renderer.render(scene, camera);
   }
-  
+  updateChunkVisibility();
 
   renderer.render(scene, camera);
 }
@@ -339,5 +375,18 @@ function getGroundLevel(x, y, z) {
 
   return h0 * (1 - sz) + h1 * sz;
 }
+
+function updateChunkVisibility() {
+  const playerPos = cameraHolder.position;
+
+  for (const chunk of chunkMeshes) {
+    const chunkCenter = new THREE.Vector3();
+    chunk.geometry.boundingSphere || chunk.geometry.computeBoundingSphere();
+    chunkCenter.copy(chunk.geometry.boundingSphere.center).add(chunk.position);
+
+    chunk.visible = chunkCenter.distanceTo(playerPos) < (renderDistance * chunkSize);
+  }
+}
+
 
 init();
