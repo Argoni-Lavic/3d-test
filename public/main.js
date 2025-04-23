@@ -325,17 +325,17 @@ function animate() {
 
       if (dy < 0){
       }else{
-        if (slopeAngle > 50 && slopeAngle <= 80) {
+        if (slopeAngle > 30 && slopeAngle <= 70) {
           // Revert movement on steep slope
           cameraHolder.position.x = prevX;
           cameraHolder.position.z = prevZ;
   
-          cameraHolder.position.add(forward.clone().multiplyScalar(velocity.z / ((slopeAngle - 49) / 5)));
-          cameraHolder.position.add(right.clone().multiplyScalar(velocity.x / ((slopeAngle - 49) / 5)));
+          cameraHolder.position.add(forward.clone().multiplyScalar(velocity.z / ((slopeAngle - 29) / 5)));
+          cameraHolder.position.add(right.clone().multiplyScalar(velocity.x / ((slopeAngle - 29) / 5)));
       
           // Clamp to previous terrain height
           cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z) + playerHeight;
-        }else if(slopeAngle > 80){
+        }else if(slopeAngle > 70){
           cameraHolder.position.x = prevX;
           cameraHolder.position.z = prevZ;
           cameraHolder.position.y = prevY + playerHeight;
