@@ -13,7 +13,9 @@ let gridSize = 20;
 let elevation = 1; 
 let terrain = [];
 let grassColor = randomizeColor(0x228B22, 0.1);
-let grassColorVariance = 0.1
+let grassColorVariance = 0.1;
+let minimumPlayerY = 0;
+let playerHeight = 1.6;
 
 function init() {
   // Scene and Renderer
@@ -26,14 +28,6 @@ function init() {
   const light = new THREE.DirectionalLight(0xffffff, 1);
   light.position.set(5, 10, 5);
   scene.add(light);
-
-  // Ground
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(20, 20),
-    new THREE.MeshStandardMaterial({ color: 0x555555 })
-  );
-  ground.rotation.x = -Math.PI / 2;
-  scene.add(ground);
 
   createGround();
 
@@ -180,15 +174,15 @@ function animate() {
     cameraHolder.position.add(up.multiplyScalar(velocity.y));
   } else {
     // Gravity and jump
-    //const groundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z);
-    const groundLevel = 0;
-    if (cameraHolder.position.y > groundLevel + 1.6) {
+    const groundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z);
+    //const groundLevel = 0;
+    if (cameraHolder.position.y > groundLevel + playerHeight && cameraHolder.position.y > minimumPlayerY + playerHeight) {
       yVelocity -= 0.01; // gravity
       onGround = false;
     } else {
       yVelocity = 0;
       onGround = true;
-      cameraHolder.position.y = groundLevel + 1.6;
+      cameraHolder.position.y = groundLevel + playerHeight;
     }
 
     if (keys['Space'] && onGround) {
@@ -202,7 +196,7 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-function getGroundHeight(x, y, z) {
+function getGroundLevel(x, y, z) {
   const x0 = Math.floor(x);
   const x1 = x0 + 1;
   const z0 = Math.floor(z);
@@ -212,7 +206,7 @@ function getGroundHeight(x, y, z) {
     x0 < 0 || x1 >= terrain.length ||
     z0 < 0 || z1 >= terrain[0].length
   ) {
-    return -Infinity; // Out of bounds
+    return 0; // Out of bounds
   }
 
   const sx = x - x0;
