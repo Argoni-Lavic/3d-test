@@ -1,5 +1,4 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-//import { BufferGeometryUtils } from './BufferGeometryUtils.js';
 
 let scene, camera, cameraHolder, renderer;
 let keys = {};
@@ -9,11 +8,11 @@ let pitch = 0;
 let isFlying = false;
 let yVelocity = 0;
 let onGround = false;
-let gridSize = 50; 
+let gridSize = 100; 
 let elevation = 2; 
 let terrain = [];
 let terainOffset = terrain/ 2;
-let grassColor = randomizeColor(0x228B22, 0.1);
+let grassColor = 0x228B22;
 let grassColorVariance = 0.1;
 let minimumPlayerY = 0;
 let playerHeight = 1.6;
@@ -27,7 +26,7 @@ function init() {
 
   // Lighting
   const light = new THREE.DirectionalLight(0xffffff, 1);
-  light.position.set(5, 10, 5);
+  light.position.set(0, 100, 0);
   scene.add(light);
 
   createGround();
@@ -72,29 +71,61 @@ function onMouseMove(e) {
   camera.rotation.x = pitch;
 }
 
-function createGround(){
+function createGround() {
+  const terrain = [];
+  const positions = [];
+  const indices = [];
+  const colors = [];
+  let vertexIndex = 0;
+
   for (let x = 0; x < gridSize; x++) {
     terrain[x] = [];
     for (let z = 0; z < gridSize; z++) {
-      // Normalize the noise to the range [0, 1], then scale to desired height
-      terrain[x][z] = Math.floor(pseudoNoise(x, z) * elevation);
+      const noiseValue = pseudoNoise(x, z);
+      terrain[x][z] = Math.floor((noiseValue + 1) * elevation);
     }
   }
-  
-  for (let x = 0; x < (gridSize - 1); x++) {
-    for (let z = 0; z < (gridSize - 1); z++) {
-      const points = [
-        new THREE.Vector3(x, terrain[x][z], z),
-        new THREE.Vector3(x + 1, terrain[x + 1][z], z),
-        new THREE.Vector3(x + 1, terrain[x + 1][z + 1], z + 1),
-        new THREE.Vector3(x, terrain[x][z + 1], z + 1),
-      ];
-      
-      const plane = createPlaneFromPoints(points, randomizeColor(grassColor, grassColorVariance));
-      scene.add(plane);
-    }
-  }
+
+  for (let x = 0; x < gridSize - 1; x++) {
+    for (let z = 0; z < gridSize - 1; z++) {
+      const v0 = [x, terrain[x][z], z];
+      const v1 = [x + 1, terrain[x + 1][z], z];
+      const v2 = [x + 1, terrain[x + 1][z + 1], z + 1];
+      const v3 = [x, terrain[x][z + 1], z + 1];
+
+      positions.push(...v0, ...v1, ...v2, ...v3);
+
+      // Color based on average height
+      const quadColor = randomizeColor(grassColor, grassColorVariance);
+for (let i = 0; i < 4; i++) {
+  colors.push(quadColor.r, quadColor.g, quadColor.b);
 }
+
+      indices.push(
+        vertexIndex, vertexIndex + 1, vertexIndex + 2,
+        vertexIndex + 2, vertexIndex + 3, vertexIndex
+      );
+
+      vertexIndex += 4;
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    flatShading: false,
+    side: THREE.DoubleSide
+  });
+
+  const terrainMesh = new THREE.Mesh(geometry, material);
+  scene.add(terrainMesh);
+}
+
 
 function randomizeColor(hex, variance = 0.1) {
   const base = new THREE.Color(hex);
@@ -227,11 +258,8 @@ function animate() {
           cameraHolder.position.z = prevZ;
           cameraHolder.position.y = prevY + playerHeight;
         }
-      }
-      
+      }  
     }
-    
-
     cameraHolder.position.y += yVelocity;
   }
   
