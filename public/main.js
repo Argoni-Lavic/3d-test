@@ -8,8 +8,11 @@ let pitch = 0;
 let isFlying = false;
 let yVelocity = 0;
 let onGround = false;
-let gridSize = 100; 
+let gridSize = 25;
+let chunkSize = 10;
 let elevation = 2; 
+let terrainScale = 0.05;
+let terrainSmoothingFactor = 5;
 let terrain = [];
 let terainOffset = terrain/ 2;
 let grassColor = 0x228B22;
@@ -39,6 +42,7 @@ function init() {
   scene.add(cameraHolder);
 
   cameraHolder.position.y = playerHeight + 2
+  cameraHolder.rotation.y = 180;
 
   // Pointer lock
   document.body.addEventListener('click', () => {
@@ -69,10 +73,10 @@ function onMouseMove(e) {
   pitch -= e.movementY * sensitivity;
   pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
   camera.rotation.x = pitch;
+  renderer.render(scene, camera);
 }
 
 function createGround() {
-  const terrain = [];
   const positions = [];
   const indices = [];
   const colors = [];
@@ -81,8 +85,8 @@ function createGround() {
   for (let x = 0; x < gridSize; x++) {
     terrain[x] = [];
     for (let z = 0; z < gridSize; z++) {
-      const noiseValue = pseudoNoise(x, z);
-      terrain[x][z] = Math.floor((noiseValue + 1) * elevation);
+      const noiseValue = pseudoNoise(x, z); 
+      terrain[x][z] = Math.floor(noiseValue);
     }
   }
 
@@ -137,8 +141,49 @@ function randomizeColor(hex, variance = 0.1) {
   return new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
 }
 
+function randGrid(x, z) {
+  // Coherent random grid value
+  return Math.sin(x * 157.5 + z * 311.7) * 43758.5453123 % 1;
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function fade(t) {
+  // Smoother interpolation curve
+  return t * t * t * (t * (t * 6 - 15) + 10);
+}
+
+function interpolatedNoise(x, z, scale) {
+  x *= scale;
+  z *= scale;
+
+  const x0 = Math.floor(x);
+  const z0 = Math.floor(z);
+  const x1 = x0 + 1;
+  const z1 = z0 + 1;
+
+  const sx = fade(x - x0);
+  const sz = fade(z - z0);
+
+  const n00 = randGrid(x0, z0);
+  const n10 = randGrid(x1, z0);
+  const n01 = randGrid(x0, z1);
+  const n11 = randGrid(x1, z1);
+
+  const ix0 = lerp(n00, n10, sx);
+  const ix1 = lerp(n01, n11, sx);
+  const value = lerp(ix0, ix1, sz);
+
+  return value * elevation;
+}
+
 function pseudoNoise(x, z) {
-  return Math.sin(x * 0.1 + z * 0.1) * Math.cos(z * 0.1) * 5;
+  return( 
+    interpolatedNoise(x, z, terrainScale) * elevation +
+    interpolatedNoise(x, z, terrainScale / 10) * elevation * 10
+  ); // adjust 40 for terrain height
 }
 
 function createPlaneFromPoints(points, color) {
@@ -261,6 +306,7 @@ function animate() {
       }  
     }
     cameraHolder.position.y += yVelocity;
+    renderer.render(scene, camera);
   }
   
 
