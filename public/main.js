@@ -6,12 +6,13 @@ let keys = {};
 let velocity = new THREE.Vector3();
 let moveSpeed = 0.1;
 let pitch = 0;
-let isFlying = true;
+let isFlying = false;
 let yVelocity = 0;
 let onGround = true;
 let gridSize = 20; 
-let elevation = 1; 
+let elevation = 2; 
 let terrain = [];
+let terainOffset = terrain/ 2;
 let grassColor = randomizeColor(0x228B22, 0.1);
 let grassColorVariance = 0.1;
 let minimumPlayerY = 0;
@@ -166,12 +167,18 @@ function animate() {
   const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
   const up = new THREE.Vector3(0, 1, 0);
 
+  const prevX = cameraHolder.position.x;
+  const prevZ = cameraHolder.position.z;
+  const prevY = cameraHolder.position.y - playerHeight;
+  const prevOnGround = onGround
+
   // Movement
   cameraHolder.position.add(forward.multiplyScalar(velocity.z));
   cameraHolder.position.add(right.multiplyScalar(velocity.x));
 
   if (isFlying) {
     cameraHolder.position.add(up.multiplyScalar(velocity.y));
+    onGround = false;
   } else {
     // Gravity and jump
     const groundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z);
@@ -189,9 +196,45 @@ function animate() {
       yVelocity = 0.2; // jump
       onGround = false;
     }
+    
+    if (onGround && prevOnGround) {
+      const newGroundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z);
+      const prevGroundLevel = getGroundLevel(prevX, 0, prevZ);
+    
+      const dx = cameraHolder.position.x - prevX;
+      const dz = cameraHolder.position.z - prevZ;
+      const dy = newGroundLevel - prevGroundLevel;
+    
+      const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+      if (horizontalDist === 0) return;
+    
+      const slopeAngle = Math.atan2(Math.abs(dy), horizontalDist) * (180 / Math.PI);
+
+      if (dy < 0){
+      }else{
+        if (slopeAngle > 50 && slopeAngle <= 80) {
+          // Revert movement on steep slope
+          cameraHolder.position.x = prevX;
+          cameraHolder.position.z = prevZ;
+  
+          cameraHolder.position.add(forward.clone().multiplyScalar(velocity.z / ((slopeAngle - 49) / 5)));
+          cameraHolder.position.add(right.clone().multiplyScalar(velocity.x / ((slopeAngle - 49) / 5)));
+      
+          // Clamp to previous terrain height
+          cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z) + playerHeight;
+        }else if(slopeAngle > 80){
+          cameraHolder.position.x = prevX;
+          cameraHolder.position.z = prevZ;
+          cameraHolder.position.y = prevY + playerHeight;
+        }
+      }
+      
+    }
+    
 
     cameraHolder.position.y += yVelocity;
   }
+  
 
   renderer.render(scene, camera);
 }
