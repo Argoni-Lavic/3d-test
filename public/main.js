@@ -1,7 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 
-let scene, camera, cameraHolder, renderer, UIholder;
+let scene, camera, cameraHolder, renderer, UIholder, key;
 let keys = {};
 
 let velocity = new THREE.Vector3();
@@ -26,6 +26,10 @@ let grassColorVariance = 0.1;
 
 let minimumPlayerY = 0;
 let playerHeight = 1.6;
+
+let selectedSlotIndex = -1;
+let hotbarSlots = [];
+let slotGlows = [];
 
 // Create a texture loader
 const textureLoader = new THREE.TextureLoader();
@@ -82,9 +86,13 @@ function init() {
     keys[e.code] = true;
   
     if (e.code === 'KeyF') {
+      if (isFlying){
+        cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z) + playerHeight;
+      }
       isFlying = !isFlying;
       console.log('Fly mode:', isFlying ? 'ON' : 'OFF');
     }
+    key = parseInt(e.key);
   });
   
   document.addEventListener('keyup', (e) => {
@@ -95,6 +103,8 @@ function init() {
   animate();
 }
 
+
+
 function onMouseMove(e) {
   const sensitivity = 0.002;
   cameraHolder.rotation.y -= e.movementX * sensitivity;
@@ -102,54 +112,33 @@ function onMouseMove(e) {
   pitch -= e.movementY * sensitivity;
   pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
   camera.rotation.x = pitch;
-  renderer.render(scene, camera);
 }
 
-function createUI(){
+function createUI() {
   UIholder = new THREE.Object3D();
-  const geometry = new THREE.CircleGeometry( 0.05, 12 ); 
-  const material = new THREE.MeshBasicMaterial( { color: 0xadd8e6 } );
+  const geometry = new THREE.CircleGeometry(0.05, 12);
+  const glowGeometry = new THREE.CircleGeometry(0.06, 12); // slightly bigger
 
-  const hotbarslot1 = new THREE.Mesh( geometry, material ); 
-  hotbarslot1.position.set(0.35, -0.6, -1);
-  scene.add( hotbarslot1 );
-  UIholder.add(hotbarslot1);
+  const baseColor = 0x00d8e6;
+  const slotPositions = [-0.35, -0.25, -0.15, -0.05, 0.05, 0.15, 0.25, 0.35];
 
-  const hotbarslot2 = new THREE.Mesh( geometry, material ); 
-  hotbarslot2.position.set(0.25, -0.6, -1);
-  scene.add( hotbarslot2 );
-  UIholder.add(hotbarslot2);
+  for (let i = 0; i < slotPositions.length; i++) {
+    const material = new THREE.MeshBasicMaterial({ color: baseColor });
+    const slot = new THREE.Mesh(geometry, material);
+    slot.position.set(slotPositions[i], -0.6, -1);
+    scene.add(slot);
+    UIholder.add(slot);
+    hotbarSlots.push(slot);
 
-  const hotbarslot3 = new THREE.Mesh( geometry, material ); 
-  hotbarslot3.position.set(0.15, -0.6, -1);
-  scene.add( hotbarslot3 );
-  UIholder.add(hotbarslot3);
-
-  const hotbarslot4 = new THREE.Mesh( geometry, material ); 
-  hotbarslot4.position.set(0.05, -0.6, -1);
-  scene.add( hotbarslot4 );
-  UIholder.add(hotbarslot4);
-  
-  const hotbarslot5 = new THREE.Mesh( geometry, material ); 
-  hotbarslot5.position.set(-0.05, -0.6, -1);
-  scene.add( hotbarslot5 );
-  UIholder.add(hotbarslot5);
-
-  const hotbarslot6 = new THREE.Mesh( geometry, material ); 
-  hotbarslot6.position.set(-0.15, -0.6, -1);
-  scene.add( hotbarslot6 );
-  UIholder.add(hotbarslot6);
-
-  const hotbarslot7 = new THREE.Mesh( geometry, material ); 
-  hotbarslot7.position.set(-0.25, -0.6, -1);
-  scene.add( hotbarslot7 );
-  UIholder.add(hotbarslot7);
-
-  const hotbarslot8 = new THREE.Mesh( geometry, material ); 
-  hotbarslot8.position.set(-0.35, -0.6, -1);
-  scene.add( hotbarslot8 );
-  UIholder.add(hotbarslot8);
-} 
+    // Create glow ring (transparent and dim)
+    const glowMaterial = new THREE.MeshBasicMaterial({ color: 0xbee9f7, transparent: true, opacity: 0 });
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    glow.position.copy(slot.position);
+    scene.add(glow);
+    UIholder.add(glow);
+    slotGlows.push(glow);
+  }
+}
 
 function createGround() {
   // Generate terrain heights
@@ -313,16 +302,27 @@ function animate() {
 }
 
 function player(){
+
+  if (key >= 1 && key <= 8) {
+    selectSlot(key - 1);
+    return;
+  }
+
   velocity.set(0, 0, 0);
 
-  if (keys['KeyW']) velocity.z += 1;
-  if (keys['KeyS']) velocity.z -= 1;
-  if (keys['KeyA']) velocity.x -= 1;
-  if (keys['KeyD']) velocity.x += 1;
-
-  if (isFlying) {
+  if (keys['KeyW']) {
+    velocity.z += 1;
+  }else if (keys['KeyS']){ 
+    velocity.z -= 1;
+  }else if (keys['KeyA']){ 
+    velocity.x -= 1;
+  }else if (keys['KeyD']){ 
+    velocity.x += 1;
+  }else if (isFlying) {
     if (keys['Space']) velocity.y += 1;
     if (keys['ShiftLeft'] || keys['ShiftRight']) velocity.y -= 1;
+  } else {
+    return;
   }
 
   velocity.normalize().multiplyScalar(moveSpeed);
@@ -440,6 +440,23 @@ function updateChunkVisibility() {
 
     chunk.visible = chunkCenter.distanceTo(playerPos) < (renderDistance * chunkSize);
   }
+}
+
+function selectSlot(index) {
+  // Reset previous slot
+  if (selectedSlotIndex !== -1) {
+    hotbarSlots[selectedSlotIndex].scale.set(1, 1, 1);
+    slotGlows[selectedSlotIndex].material.opacity = 0;
+    hotbarSlots[selectedSlotIndex].position.y -= 0.01;
+    slotGlows[selectedSlotIndex].position.y -= 0.01;
+  }
+
+  // Apply highlight to selected
+  hotbarSlots[index].scale.set(1.2, 1.2, 1.2); // scale up
+  slotGlows[index].material.opacity = 0.5;     // show glow
+  hotbarSlots[index].position.y += 0.01;
+  slotGlows[index].position.y += 0.01;
+  selectedSlotIndex = index;
 }
 
 
