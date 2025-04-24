@@ -1,7 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 
-let scene, camera, cameraHolder, renderer;
+let scene, camera, cameraHolder, renderer, UIholder;
 let keys = {};
 
 let velocity = new THREE.Vector3();
@@ -60,10 +60,12 @@ function init() {
   const sky = new THREE.Mesh(skyGeometry, skyMaterial);
   sky.position.set(gridSize / 2, 0, gridSize / 2);
   scene.add(sky);
+  createUI();
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, gridSize * 2.1);
   camera.position.y = playerHeight;
   cameraHolder = new THREE.Object3D();
   cameraHolder.add(camera);
+  camera.add(UIholder);
   scene.add(cameraHolder);
 
   cameraHolder.position.x = gridSize / 2;
@@ -102,6 +104,52 @@ function onMouseMove(e) {
   camera.rotation.x = pitch;
   renderer.render(scene, camera);
 }
+
+function createUI(){
+  UIholder = new THREE.Object3D();
+  const geometry = new THREE.CircleGeometry( 0.05, 12 ); 
+  const material = new THREE.MeshBasicMaterial( { color: 0xadd8e6 } );
+
+  const hotbarslot1 = new THREE.Mesh( geometry, material ); 
+  hotbarslot1.position.set(0.35, -0.6, -1);
+  scene.add( hotbarslot1 );
+  UIholder.add(hotbarslot1);
+
+  const hotbarslot2 = new THREE.Mesh( geometry, material ); 
+  hotbarslot2.position.set(0.25, -0.6, -1);
+  scene.add( hotbarslot2 );
+  UIholder.add(hotbarslot2);
+
+  const hotbarslot3 = new THREE.Mesh( geometry, material ); 
+  hotbarslot3.position.set(0.15, -0.6, -1);
+  scene.add( hotbarslot3 );
+  UIholder.add(hotbarslot3);
+
+  const hotbarslot4 = new THREE.Mesh( geometry, material ); 
+  hotbarslot4.position.set(0.05, -0.6, -1);
+  scene.add( hotbarslot4 );
+  UIholder.add(hotbarslot4);
+  
+  const hotbarslot5 = new THREE.Mesh( geometry, material ); 
+  hotbarslot5.position.set(-0.05, -0.6, -1);
+  scene.add( hotbarslot5 );
+  UIholder.add(hotbarslot5);
+
+  const hotbarslot6 = new THREE.Mesh( geometry, material ); 
+  hotbarslot6.position.set(-0.15, -0.6, -1);
+  scene.add( hotbarslot6 );
+  UIholder.add(hotbarslot6);
+
+  const hotbarslot7 = new THREE.Mesh( geometry, material ); 
+  hotbarslot7.position.set(-0.25, -0.6, -1);
+  scene.add( hotbarslot7 );
+  UIholder.add(hotbarslot7);
+
+  const hotbarslot8 = new THREE.Mesh( geometry, material ); 
+  hotbarslot8.position.set(-0.35, -0.6, -1);
+  scene.add( hotbarslot8 );
+  UIholder.add(hotbarslot8);
+} 
 
 function createGround() {
   // Generate terrain heights

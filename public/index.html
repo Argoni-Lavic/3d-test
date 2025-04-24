@@ -2,15 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Three.js + Cannon</title>
+    <title>3D game</title>
     <style>
-      body { margin: 0; overflow: hidden; }
-      canvas { display: block; }
+      body, html {
+        margin: 0;
+        overflow: hidden;
+      }
+
+      canvas {
+        display: block;
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1;
+      }
     </style>
   </head>
   <body>
-    <script type="module" src="BufferGeometryUtils.js"></script>
     <script type="module" src="main.js"></script>
-
   </body>
 </html>
