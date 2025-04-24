@@ -19,7 +19,6 @@ let renderDistance = 5;
 
 let elevation = 2; 
 let terrainScale = 0.05;
-let terrainSmoothingFactor = 5;
 let terrain = [];
 
 let grassColor = 0x228B22;
@@ -31,6 +30,8 @@ let playerHeight = 1.6;
 let selectedSlotIndex = -1;
 let hotbarSlots = [];
 let slotGlows = [];
+
+let placementGrid = [];
 
 // Create a texture loader
 const textureLoader = new THREE.TextureLoader();
@@ -447,7 +448,8 @@ function getGroundLevel(x, y, z) {
   const h0 = h00 * (1 - sx) + h10 * sx;
   const h1 = h01 * (1 - sx) + h11 * sx;
 
-  return h0 * (1 - sz) + h1 * sz;
+  const terainHeight = h0 * (1 - sz) + h1 * sz;
+  return terainHeight; // add more logic soon for macine placement
 }
 
 function updateChunkVisibility() {
