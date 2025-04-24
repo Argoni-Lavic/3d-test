@@ -5,7 +5,7 @@ let scene, camera, cameraHolder, renderer;
 let keys = {};
 
 let velocity = new THREE.Vector3();
-let moveSpeed = 0.1;
+let moveSpeed = 0.5;
 let pitch = 0;
 let isFlying = false;
 let yVelocity = 0;
@@ -14,7 +14,7 @@ let onGround = false;
 let gridSize = 1000;
 let chunkSize = 10;
 let chunkMeshes = [];
-let renderDistance = 10;
+let renderDistance = 5;
 
 let elevation = 2; 
 let terrainScale = 0.05;
@@ -50,7 +50,7 @@ function init() {
 
   // Camera, Holder, and sky
   // Create a large inverted sphere to act as the sky
-  const skyGeometry = new THREE.SphereGeometry(gridSize * 10, 32, 32);
+  const skyGeometry = new THREE.SphereGeometry(gridSize * 1, 8, 8);
   const skyMaterial = new THREE.MeshBasicMaterial({
   map: skyTexture,        // Apply the night sky texture
   side: THREE.BackSide,   // Render the inside of the sphere
@@ -58,15 +58,17 @@ function init() {
   transparent: true       // Allow transparency if needed
 });
   const sky = new THREE.Mesh(skyGeometry, skyMaterial);
-  sky.position.set(0, 0, 0);
+  sky.position.set(gridSize / 2, 0, gridSize / 2);
   scene.add(sky);
-  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, gridSize * gridSize);
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, gridSize * 2.1);
   camera.position.y = playerHeight;
   cameraHolder = new THREE.Object3D();
   cameraHolder.add(camera);
   scene.add(cameraHolder);
 
-  cameraHolder.position.y = playerHeight + 2
+  cameraHolder.position.x = gridSize / 2;
+  cameraHolder.position.z = gridSize / 2;
+  cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z) + playerHeight + 2
   cameraHolder.rotation.y = 180;
 
   // Pointer lock
@@ -255,7 +257,14 @@ function createPlaneFromPoints(points, color) {
 
 function animate() {
   requestAnimationFrame(animate);
+  player()
+  
+  updateChunkVisibility();
 
+  renderer.render(scene, camera);
+}
+
+function player(){
   velocity.set(0, 0, 0);
 
   if (keys['KeyW']) velocity.z += 1;
@@ -344,9 +353,6 @@ function animate() {
     }
     cameraHolder.position.y += yVelocity;
   }
-  updateChunkVisibility();
-
-  renderer.render(scene, camera);
 }
 
 function getGroundLevel(x, y, z) {
