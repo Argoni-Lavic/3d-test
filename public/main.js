@@ -3,6 +3,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 
 let scene, camera, cameraHolder, renderer, UIholder, key;
 let keys = {};
+let keyDown = false;
 
 let velocity = new THREE.Vector3();
 let moveSpeed = 0.5;
@@ -12,7 +13,7 @@ let yVelocity = 0;
 let onGround = false;
 
 let gridSize = 1000;
-let chunkSize = 10;
+let chunkSize = 25;
 let chunkMeshes = [];
 let renderDistance = 5;
 
@@ -255,8 +256,10 @@ function interpolatedNoise(x, z, scale) {
 
 function pseudoNoise(x, z) {
   return( 
-    interpolatedNoise(x, z, terrainScale) * elevation +
-    interpolatedNoise(x, z, terrainScale / 10) * elevation * 10
+    interpolatedNoise(x, z, terrainScale / 3) * elevation -
+    interpolatedNoise(z, x, terrainScale / 100) * elevation +
+    interpolatedNoise(x, z, terrainScale / 10) * elevation * 10 -
+    interpolatedNoise(x, z, terrainScale / 1000) * elevation * 100
   ); // adjust 40 for terrain height
 }
 
@@ -305,25 +308,30 @@ function player(){
 
   if (key >= 1 && key <= 8) {
     selectSlot(key - 1);
-    return;
   }
 
   velocity.set(0, 0, 0);
 
   if (keys['KeyW']) {
     velocity.z += 1;
-  }else if (keys['KeyS']){ 
+  } 
+  if(keys['KeyS']){ 
     velocity.z -= 1;
-  }else if (keys['KeyA']){ 
+  } 
+  if (keys['KeyA']){ 
     velocity.x -= 1;
-  }else if (keys['KeyD']){ 
+  } 
+  if (keys['KeyD']){ 
     velocity.x += 1;
-  }else if (isFlying) {
+  } 
+  if (isFlying) {
     if (keys['Space']) velocity.y += 1;
     if (keys['ShiftLeft'] || keys['ShiftRight']) velocity.y -= 1;
-  } else {
+  } 
+  if (!anyKeyPressed() && onGround){
     return;
   }
+  
 
   velocity.normalize().multiplyScalar(moveSpeed);
 
@@ -359,7 +367,6 @@ function player(){
       onGround = true;
       cameraHolder.position.y = groundLevel + playerHeight;
     }
-
     if (keys['Space'] && onGround) {
       yVelocity = 0.2; // jump
       onGround = false;
@@ -399,7 +406,20 @@ function player(){
         }
       }  
     }
-    cameraHolder.position.y += yVelocity;
+    if(cameraHolder.position.x < 0.5){
+      cameraHolder.position.x = 0.5;
+    }else if (cameraHolder.position.x > gridSize - 1.5){
+      cameraHolder.position.x = gridSize - 1.5;
+    }else if (cameraHolder.position.z < 0.5){
+      cameraHolder.position.z = 0.5;
+    }else if (cameraHolder.position.z > gridSize - 1.5){
+      cameraHolder.position.z = gridSize - 1.5;
+    }else{
+      cameraHolder.position.y += yVelocity;
+      return;
+    }
+    yVelocity = 0;
+    return;
   }
 }
 
@@ -459,5 +479,13 @@ function selectSlot(index) {
   selectedSlotIndex = index;
 }
 
+function anyKeyPressed() {
+  for (let key in keys) {
+    if (keys[key]) {
+      return true;
+    }
+  }
+  return false;
+}
 
 init();
