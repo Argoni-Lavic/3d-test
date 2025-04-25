@@ -1,7 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 
-let scene, camera, cameraHolder, renderer, UIholder, key;
+let scene, camera, cameraHolder, renderer, UIholder, key, colideGroup;
 let keys = {};
 let keyDown = false;
 
@@ -53,6 +53,19 @@ function init() {
   scene.add(light);
 
   createGround();
+
+  // Create a group to hold machines
+colideGroup = new THREE.Group();
+scene.add(colideGroup);
+
+// Add machines to the group (example with cubes representing machines)
+const machine1 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
+machine1.position.set(495, 100, 495);
+colideGroup.add(machine1);
+
+const machine2 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x00ff00 }));
+machine2.position.set(510, 100, 510);
+colideGroup.add(machine2);
 
   // Camera, Holder, and sky
   // Create a large inverted sphere to act as the sky
@@ -447,9 +460,47 @@ function getGroundLevel(x, y, z) {
 
   const h0 = h00 * (1 - sx) + h10 * sx;
   const h1 = h01 * (1 - sx) + h11 * sx;
-
+  
   const terainHeight = h0 * (1 - sz) + h1 * sz;
-  return terainHeight; // add more logic soon for macine placement
+  const object = getHighestObjectBelowY(x, y, z, 0.6, colideGroup);
+
+  if (terainHeight < object){
+    return object;
+  }else{
+    return terainHeight;
+  }
+}
+
+function getHighestObjectBelowY(x, maxY, z, tolerance = 0.1, group) {
+  let highestY = -Infinity;  // Initialize to a very low number
+  let highestObject = null;  // Object that holds the highest y
+
+  // Loop through all objects in the group
+  group.traverse((object) => {
+    if (object instanceof THREE.Mesh) {
+      // Ensure bounding box is updated for the mesh
+      object.geometry.computeBoundingBox();
+      const bbox = object.geometry.boundingBox;
+
+      // Check if the object is within the x, z tolerance and below maxY
+      if (
+        Math.abs(object.position.x - x) < bbox.max.x &&
+        Math.abs(object.position.z - z) < bbox.max.z &&
+        object.position.y <= maxY
+      ) {
+        // Get the top Y value of the object's bounding box
+        const objectTopY = object.position.y + bbox.max.y;
+
+        // Update highestY if this object is the highest one encountered
+        if (objectTopY > highestY) {
+          highestY = objectTopY;
+          highestObject = object;
+        }
+      }
+    }
+  });
+
+  return highestObject ? highestY : -Infinity;
 }
 
 function updateChunkVisibility() {
