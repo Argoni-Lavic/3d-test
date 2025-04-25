@@ -89,7 +89,7 @@ colideGroup.add(machine2);
 
   cameraHolder.position.x = gridSize / 2;
   cameraHolder.position.z = gridSize / 2;
-  cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z) + playerHeight + 2
+  cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true) + playerHeight + 2
   cameraHolder.rotation.y = 180;
 
   // Pointer lock
@@ -101,9 +101,6 @@ colideGroup.add(machine2);
     keys[e.code] = true;
   
     if (e.code === 'KeyF') {
-      if (isFlying){
-        cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z) + playerHeight;
-      }
       isFlying = !isFlying;
       console.log('Fly mode:', isFlying ? 'ON' : 'OFF');
     }
@@ -371,10 +368,13 @@ function player(){
     onGround = false;
   } else {
     // Gravity and jump
-    const groundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z);
+    const groundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true);
     //const groundLevel = 0;
     if (cameraHolder.position.y > groundLevel + playerHeight && cameraHolder.position.y > minimumPlayerY + playerHeight) {
-      yVelocity -= 0.01; // gravity
+      if (!yVelocity >= -53.8){ //player terminal velocity
+        yVelocity -= 0.01; // gravity
+      }
+
       onGround = false;
     } else {
       yVelocity = 0;
@@ -387,8 +387,8 @@ function player(){
     }
     
     if (onGround && prevOnGround) {
-      const newGroundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z);
-      const prevGroundLevel = getGroundLevel(prevX, 0, prevZ);
+      const newGroundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true);
+      const prevGroundLevel = getGroundLevel(prevX, 0, prevZ, true);
     
       const dx = cameraHolder.position.x - prevX;
       const dz = cameraHolder.position.z - prevZ;
@@ -412,7 +412,7 @@ function player(){
           cameraHolder.position.add(right.clone().multiplyScalar(velocity.x / ((slopeAngle - 29) / 5)));
       
           // Clamp to previous terrain height
-          cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z) + playerHeight;
+          cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true) + playerHeight;
         }else if(slopeAngle > 70){
           cameraHolder.position.x = prevX;
           cameraHolder.position.z = prevZ;
@@ -437,7 +437,7 @@ function player(){
   }
 }
 
-function getGroundLevel(x, y, z) {
+function getGroundLevel(x, y, z, colideWithOtherObjects = false) {
   const x0 = Math.floor(x);
   const x1 = x0 + 1;
   const z0 = Math.floor(z);
@@ -460,12 +460,16 @@ function getGroundLevel(x, y, z) {
 
   const h0 = h00 * (1 - sx) + h10 * sx;
   const h1 = h01 * (1 - sx) + h11 * sx;
-  
   const terainHeight = h0 * (1 - sz) + h1 * sz;
-  const object = getHighestObjectBelowY(x, y, z, 0.6, colideGroup);
+  
+  if (colideWithOtherObjects){
+    const object = getHighestObjectBelowY(x, y, z, 0.6, colideGroup);
 
-  if (terainHeight < object){
-    return object;
+    if (terainHeight < object){
+      return object;
+    }else{
+      return terainHeight;
+    }
   }else{
     return terainHeight;
   }
