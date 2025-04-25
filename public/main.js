@@ -1,7 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 
-let scene, camera, cameraHolder, renderer, UIholder, key, colideGroup;
+let scene, camera, cameraHolder, renderer, UIholder, key, colideGroup, placementOutline;
 let keys = {};
 let keyDown = false;
 
@@ -33,8 +33,11 @@ let playerHeight = 1.6;
 let selectedSlotIndex = -1;
 let hotbarSlots = [];
 let slotGlows = [];
+let interactionDistance = 5;
 
-let placementGrid = [];
+let raycaster, intersectedObject;
+let machineGeometry, machineMaterial;
+let placedMachines = [];
 
 // Create a texture loader
 const textureLoader = new THREE.TextureLoader();
@@ -79,7 +82,6 @@ machine1.position.set(440, 5, 520);
 colideGroup.add(machine1);
 
 const machine2 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x00ff00 }));
-machine2.position.set(510, 100, 510);
 colideGroup.add(machine2);
 
   // Camera, Holder, and sky
@@ -94,17 +96,31 @@ colideGroup.add(machine2);
   const sky = new THREE.Mesh(skyGeometry, skyMaterial);
   sky.position.set(gridSize / 2, 0, gridSize / 2);
   scene.add(sky);
+
   createUI();
+
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, gridSize * 2.1);
   camera.position.y = playerHeight;
+  
   cameraHolder = new THREE.Object3D();
   cameraHolder.add(camera);
+
   camera.add(UIholder);
   scene.add(cameraHolder);
 
+  const geometry = new THREE.BoxGeometry(1, 1, 1); // Example geometry for wireframe
+  const wireframeMaterial = new THREE.MeshBasicMaterial({
+    color: 0x00ff00,
+    wireframe: true
+  });
+  
+  placementOutline = new THREE.Mesh(geometry, wireframeMaterial);
+  scene.add( placementOutline );
+  placementOutline.position.set(500, 20, 500); 
+
   cameraHolder.position.x = gridSize / 2;
   cameraHolder.position.z = gridSize / 2;
-  cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true) + playerHeight + 2
+  cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true) + 2
   cameraHolder.rotation.y = 180;
 
   // Pointer lock
@@ -130,8 +146,6 @@ colideGroup.add(machine2);
   animate();
 }
 
-
-
 function onMouseMove(e) {
   const sensitivity = 0.002;
   cameraHolder.rotation.y -= e.movementX * sensitivity;
@@ -139,6 +153,30 @@ function onMouseMove(e) {
   pitch -= e.movementY * sensitivity;
   pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
   camera.rotation.x = pitch;
+
+  // Get the facing coordinates using raycasting on the correct groups
+  setPlaceOutline(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, camera.rotation.x, cameraHolder.rotation.y, placementOutline);
+  //alert(facing);
+}
+
+
+function setPlaceOutline(x, y, z, rotationx, rotationy, target) {
+  const dir = new THREE.Vector3();
+dir.setFromSphericalCoords(
+  interactionDistance,
+  Math.PI / 2 - rotationx, // polar angle (theta)
+  rotationy               // azimuthal angle (phi)
+);
+  target.position.x = Math.round(x + dir.x * -1) + 0.5;
+  target.position.z = Math.round(z + dir.z * -1) - 0.5;
+  const groundLevel = Math.round(getGroundLevel(target.position.x, y, target.position.z, true));
+  const calcY = Math.round(y + dir.y) + 0.5;
+  if (groundLevel < calcY){
+    target.position.y = calcY;
+  }else{
+    target.position.y = groundLevel + 0.5;
+  }
+  
 }
 
 function createUI() {
@@ -385,7 +423,7 @@ function player(){
     // Gravity and jump
     const groundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true);
     //const groundLevel = 0;
-    if (cameraHolder.position.y > groundLevel + playerHeight && cameraHolder.position.y > minimumPlayerY + playerHeight) {
+    if (cameraHolder.position.y > groundLevel + playerHeight) {
       if (!yVelocity >= -53.8){ //player terminal velocity
         yVelocity -= 0.01; // gravity
       }
@@ -480,7 +518,7 @@ function getGroundLevel(x, y, z, colideWithOtherObjects = false) {
   if (colideWithOtherObjects){
     const object = getHighestObjectBelowY(x, y, z, 0.6, colideGroup);
 
-    if (terainHeight < object || object != null){
+    if (terainHeight < object && object != null){
       return object;
     }else{
       return terainHeight;
