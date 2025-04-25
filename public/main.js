@@ -108,7 +108,7 @@ colideGroup.add(machine2);
   camera.add(UIholder);
   scene.add(cameraHolder);
 
-  const geometry = new THREE.BoxGeometry(1, 1, 1); // Example geometry for wireframe
+  const geometry = new THREE.BoxGeometry(2, 2, 2); // Example geometry for wireframe
   const wireframeMaterial = new THREE.MeshBasicMaterial({
     color: 0x00ff00,
     wireframe: true
@@ -117,6 +117,7 @@ colideGroup.add(machine2);
   placementOutline = new THREE.Mesh(geometry, wireframeMaterial);
   scene.add( placementOutline );
   placementOutline.position.set(500, 20, 500); 
+  placementOutline.visible = false;
 
   cameraHolder.position.x = gridSize / 2;
   cameraHolder.position.z = gridSize / 2;
@@ -155,8 +156,6 @@ function onMouseMove(e) {
   camera.rotation.x = pitch;
 
   // Get the facing coordinates using raycasting on the correct groups
-  setPlaceOutline(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, camera.rotation.x, cameraHolder.rotation.y, placementOutline);
-  //alert(facing);
 }
 
 
@@ -167,14 +166,14 @@ dir.setFromSphericalCoords(
   Math.PI / 2 - rotationx, // polar angle (theta)
   rotationy               // azimuthal angle (phi)
 );
-  target.position.x = Math.round(x + dir.x * -1) + 0.5;
-  target.position.z = Math.round(z + dir.z * -1) - 0.5;
+  target.position.x = Math.round(x + dir.x * -1);
+  target.position.z = Math.round(z + dir.z * -1);
   const groundLevel = Math.round(getGroundLevel(target.position.x, y, target.position.z, true));
-  const calcY = Math.round(y + dir.y) + 0.5;
+  const calcY = Math.round(y + dir.y) + 1;
   if (groundLevel < calcY){
     target.position.y = calcY;
   }else{
-    target.position.y = groundLevel + 0.5;
+    target.position.y = groundLevel + 1;
   }
   
 }
@@ -361,6 +360,7 @@ function createPlaneFromPoints(points, color) {
 
 function animate() {
   requestAnimationFrame(animate);
+  setPlaceOutline(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, camera.rotation.x, cameraHolder.rotation.y, placementOutline);
   player()
   
   updateChunkVisibility();
@@ -373,6 +373,14 @@ function player(){
   if (key >= 1 && key <= 8) {
     selectSlot(key - 1);
   }
+  if (keys['KeyX']){
+    if(placementOutline.visible == true){
+      placementOutline.visible = false;
+    }else{
+      placementOutline.visible = true;
+    }
+  }
+
 
   velocity.set(0, 0, 0);
 
