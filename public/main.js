@@ -17,6 +17,9 @@ let chunkSize = 25;
 let chunkMeshes = [];
 let renderDistance = 5;
 
+let lightColor = 0x909090;
+let lightStrenth = 1;
+
 let elevation = 2; 
 let terrainScale = 0.05;
 let terrain = [];
@@ -48,9 +51,21 @@ function init() {
   document.body.appendChild(renderer.domElement);
 
   // Lighting
-  const light = new THREE.DirectionalLight(0xffffff, 1);
-  light.position.set(0, 100, 0);
-  scene.add(light);
+  const light1 = new THREE.AmbientLight(lightColor, lightStrenth);
+  light1.position.set(0, 100, 0);
+  scene.add(light1);
+
+  const light2 = new THREE.AmbientLight(lightColor, lightStrenth);
+  light2.position.set(gridSize, 100, 0);
+  scene.add(light2);
+
+  const light3 = new THREE.AmbientLight(lightColor, lightStrenth);
+  light3.position.set(gridSize, 100, gridSize);
+  scene.add(light3);
+
+  const light4 = new THREE.AmbientLight(lightColor, lightStrenth);
+  light4.position.set(0, 100, gridSize);
+  scene.add(light4);
 
   createGround();
 
@@ -59,8 +74,8 @@ colideGroup = new THREE.Group();
 scene.add(colideGroup);
 
 // Add machines to the group (example with cubes representing machines)
-const machine1 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
-machine1.position.set(495, 100, 495);
+const machine1 = new THREE.Mesh(new THREE.BoxGeometry(50, 1, 50), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
+machine1.position.set(440, 5, 520);
 colideGroup.add(machine1);
 
 const machine2 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x00ff00 }));
@@ -387,8 +402,8 @@ function player(){
     }
     
     if (onGround && prevOnGround) {
-      const newGroundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true);
-      const prevGroundLevel = getGroundLevel(prevX, 0, prevZ, true);
+      const newGroundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y - playerHeight, cameraHolder.position.z, true);
+      const prevGroundLevel = getGroundLevel(prevX, prevY, prevZ, true);
     
       const dx = cameraHolder.position.x - prevX;
       const dz = cameraHolder.position.z - prevZ;
@@ -465,7 +480,7 @@ function getGroundLevel(x, y, z, colideWithOtherObjects = false) {
   if (colideWithOtherObjects){
     const object = getHighestObjectBelowY(x, y, z, 0.6, colideGroup);
 
-    if (terainHeight < object){
+    if (terainHeight < object || object != null){
       return object;
     }else{
       return terainHeight;
@@ -488,8 +503,8 @@ function getHighestObjectBelowY(x, maxY, z, tolerance = 0.1, group) {
 
       // Check if the object is within the x, z tolerance and below maxY
       if (
-        Math.abs(object.position.x - x) < bbox.max.x &&
-        Math.abs(object.position.z - z) < bbox.max.z &&
+        Math.abs(object.position.x - x) < bbox.max.x + tolerance &&
+        Math.abs(object.position.z - z) < bbox.max.z + tolerance &&
         object.position.y <= maxY
       ) {
         // Get the top Y value of the object's bounding box
