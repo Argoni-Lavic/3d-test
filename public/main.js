@@ -379,6 +379,7 @@ function player(){
     }else{
       placementOutline.visible = true;
     }
+    keys['KeyX'] = false;
   }
 
 
@@ -464,13 +465,13 @@ function player(){
 
       if (dy < 0){
       }else{
-        if (slopeAngle > 30 && slopeAngle <= 70) {
+        if (slopeAngle > 15 && slopeAngle <= 70) {
           // Revert movement on steep slope
           cameraHolder.position.x = prevX;
           cameraHolder.position.z = prevZ;
   
-          cameraHolder.position.add(forward.clone().multiplyScalar(velocity.z / ((slopeAngle - 29) / 5)));
-          cameraHolder.position.add(right.clone().multiplyScalar(velocity.x / ((slopeAngle - 29) / 5)));
+          cameraHolder.position.add(forward.clone().multiplyScalar(velocity.z / (5 / (slopeAngle - 14))));
+          cameraHolder.position.add(right.clone().multiplyScalar(velocity.x / (5 / (slopeAngle - 14))));
       
           // Clamp to previous terrain height
           cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true) + playerHeight;
@@ -479,7 +480,7 @@ function player(){
           cameraHolder.position.z = prevZ;
           cameraHolder.position.y = prevY + playerHeight;
         }
-      }  
+      }
     }
     if(cameraHolder.position.x < 0.5){
       cameraHolder.position.x = 0.5;
@@ -577,6 +578,15 @@ function updateChunkVisibility() {
     chunkCenter.copy(chunk.geometry.boundingSphere.center).add(chunk.position);
 
     chunk.visible = chunkCenter.distanceTo(playerPos) < (renderDistance * chunkSize);
+  }
+
+  for (const item of colideGroup.children) {
+    if (!item.geometry) continue;
+    const itemCenter = new THREE.Vector3();
+    item.geometry.boundingSphere || item.geometry.computeBoundingSphere();
+    itemCenter.copy(item.geometry.boundingSphere.center).add(item.position);
+
+    item.visible = itemCenter.distanceTo(playerPos) < (renderDistance * chunkSize);
   }
 }
 
