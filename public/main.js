@@ -128,6 +128,15 @@ colideGroup.add(machine2);
   document.body.addEventListener('click', () => {
     document.body.requestPointerLock();
   });
+
+  window.addEventListener('mousedown', (event) => {
+    if (event.button === 0) {
+      playerLeftClick();
+    } else if (event.button === 2) {
+      console.log('Right click!');
+    }
+  });
+
   document.addEventListener('mousemove', onMouseMove);
   document.addEventListener('keydown', (e) => {
     keys[e.code] = true;
@@ -615,5 +624,23 @@ function anyKeyPressed() {
   }
   return false;
 }
+
+function playerLeftClick(){
+  playerPlace();
+}
+
+function playerPlace() {
+  const machine = new THREE.Mesh(
+    new THREE.BoxGeometry(2, 2, 2),
+    new THREE.MeshStandardMaterial({ color: 0xff0000 })
+  );
+
+  machine.position.x = placementOutline.position.x;
+  machine.position.y = placementOutline.position.y;
+  machine.position.z = placementOutline.position.z;
+  scene.add(machine);
+  colideGroup.add(machine);
+}
+
 
 init();
