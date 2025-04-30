@@ -1,7 +1,13 @@
+//imports------------------------------------------------
+
+
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
 
-let scene, camera, cameraHolder, renderer, UIholder, key, colideGroup, placementOutline;
+//vars------------------------------------------------
+
+
+let scene, camera, cameraHolder, renderer, UIholder, key, colideGroup, placementOutline, inventoryHolder, inventoryPanel;
 let keys = {};
 let keyDown = false;
 
@@ -36,6 +42,9 @@ let playerHeight = 1.6;
 let selectedSlotIndex = -1;
 let hotbarSlots = [];
 let slotGlows = [];
+let UIposition = -1
+let inventoryOpen = true;
+
 let interactionDistance = 5;
 let placementCorectionOffset = -1;
 
@@ -44,6 +53,10 @@ const textureLoader = new THREE.TextureLoader();
 
 // Use the URL link for the night sky image
 let skyTexture = textureLoader.load('https://images.unsplash.com/photo-1570284613060-766c33850e00?fm=jpg&q=60&w=3000&ixlib=rb-4.0.3');
+
+
+//main setup loop------------------------------------------------
+
 
 function init() {
 
@@ -124,9 +137,12 @@ colideGroup.add(machine2);
   cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true) + 2
   cameraHolder.rotation.y = 180;
 
-  // Pointer lock
+
+  //inputs------------------------------------------------
+
+
   document.body.addEventListener('click', () => {
-    document.body.requestPointerLock();
+    
   });
   document.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -188,6 +204,8 @@ dir.setFromSphericalCoords(
   
 }
 
+//object creators------------------------------------------------
+
 function createUI() {
   UIholder = new THREE.Object3D();
   const geometry = new THREE.CircleGeometry(0.05, 12);
@@ -199,7 +217,7 @@ function createUI() {
   for (let i = 0; i < slotPositions.length; i++) {
     const material = new THREE.MeshBasicMaterial({ color: baseColor });
     const slot = new THREE.Mesh(geometry, material);
-    slot.position.set(slotPositions[i], -0.6, -1);
+    slot.position.set(slotPositions[i], -0.6, UIposition);
     scene.add(slot);
     UIholder.add(slot);
     hotbarSlots.push(slot);
@@ -212,6 +230,25 @@ function createUI() {
     UIholder.add(glow);
     slotGlows.push(glow);
   }
+
+  const hologramMaterial = new THREE.MeshBasicMaterial({
+    color: 0x3498db,         // Cyan or neon blue
+    transparent: true,
+    opacity: 0.5,            // Almost see-through
+    emissive: 0x00ffff,      // Makes it "glow"
+    emissiveIntensity: 1.5,  // Strong glow
+    metalness: 0.8,          // Reflective shimmer
+    roughness: 0.2,          // Smoother surface
+    depthWrite: false        // Prevent z-buffer issues with transparency
+  });
+  
+  inventoryHolder = new THREE.Object3D();
+
+  inventoryPanel = createRoundedRect(2, 1, 0.1, 0.1, hologramMaterial);
+  inventoryPanel.position.set(0, 0, UIposition);
+  inventoryHolder.add(inventoryPanel);
+  UIholder.add(inventoryHolder);
+  //inventoryHolder.material.opacity = 0;
 }
 
 function createGround() {
@@ -368,6 +405,35 @@ function createPlaneFromPoints(points, color) {
   return new THREE.Mesh(geometry, material);
 }
 
+function createRoundedRect(width, height, radius, depth = 0.1, material) {
+  const shape = new THREE.Shape();
+  const w = width / 2;
+  const h = height / 2;
+  const r = radius;
+
+  shape.moveTo(-w + r, -h);
+  shape.lineTo(w - r, -h);
+  shape.quadraticCurveTo(w, -h, w, -h + r);
+  shape.lineTo(w, h - r);
+  shape.quadraticCurveTo(w, h, w - r, h);
+  shape.lineTo(-w + r, h);
+  shape.quadraticCurveTo(-w, h, -w, h - r);
+  shape.lineTo(-w, -h + r);
+  shape.quadraticCurveTo(-w, -h, -w + r, -h);
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: depth,
+    bevelEnabled: false,
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+  return mesh;
+}
+
+
+//main rendering loop------------------------------------------------
+
+
 function animate() {
   requestAnimationFrame(animate);
   setPlaceOutline(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, camera.rotation.x, cameraHolder.rotation.y, placementOutline);
@@ -391,7 +457,15 @@ function player(){
     }
     keys['KeyX'] = false;
   }
-
+  if (keys['KeyE']){
+    if(!inventoryOpen){
+      showInventory();
+    }else{
+      hideInventory();
+    }
+    inventoryOpen = !inventoryOpen;
+    keys['KeyE'] = false;
+  }
 
   velocity.set(0, 0, 0);
 
@@ -641,6 +715,16 @@ function selectSlot(index) {
   hotbarSlots[index].position.y += 0.01;
   slotGlows[index].position.y += 0.01;
   selectedSlotIndex = index;
+}
+
+function showInventory(){
+  document.exitPointerLock();
+  inventoryPanel.material.opacity = 0.5;
+}
+
+function hideInventory(){
+  document.body.requestPointerLock();
+  inventoryPanel.material.opacity = 0;
 }
 
 function anyKeyPressed() {
