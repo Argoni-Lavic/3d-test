@@ -37,7 +37,7 @@ let selectedSlotIndex = -1;
 let hotbarSlots = [];
 let slotGlows = [];
 let interactionDistance = 5;
-let placementCorectionOffset = -2;
+let placementCorectionOffset = -1;
 
 // Create a texture loader
 const textureLoader = new THREE.TextureLoader();
@@ -128,6 +128,7 @@ colideGroup.add(machine2);
   document.body.addEventListener('click', () => {
     document.body.requestPointerLock();
   });
+  document.addEventListener('contextmenu', (e) => e.preventDefault());
 
   window.addEventListener('mousedown', (event) => {
     if (event.button === 0) {
@@ -614,9 +615,9 @@ function checkForBlockAt(x, y, z, tolerance = 0.1) {
     const pos = obj.position;
 
     if (
-      Math.abs(pos.x - x) < tolerance &&
-      Math.abs(pos.y - y) < tolerance &&
-      Math.abs(pos.z - z) < tolerance
+      Math.abs(pos.x - x) <= tolerance &&
+      Math.abs(pos.y - y) <= tolerance &&
+      Math.abs(pos.z - z) <= tolerance
     ) {
       return true;
     }
@@ -679,11 +680,11 @@ function playerLeftClick() {
   step.multiplyScalar(placementCorectionOffset);
 
   // Walk along the direction until a free space is found
-  const maxSteps = 10;
+  const maxSteps = 5;
   let placement = origin.clone();
   let steps = 0;
 
-  while (checkForBlockAt(placement.x, placement.y, placement.z) && steps < maxSteps) {
+  while (checkForBlockAt(placement.x, placement.y, placement.z, 1) && steps < maxSteps) {
     placement.add(step);
     steps++;
   }
@@ -694,13 +695,13 @@ function playerLeftClick() {
     placement.y = groundLevel;
   }
 
-  if (!checkForBlockAt(placement.x, placement.y, placement.z)){
+  if (!checkForBlockAt(placement.x, placement.y, placement.z, 1)){
     playerPlace(placement.x, placement.y, placement.z);
   }
 }
 
 function playerBreak(x, y, z){
-  const tolerance = 0.01; // helps with floating-point precision
+  const tolerance = 1; // helps with floating-point precision
 
   // Search for matching object in the collision group
   for (let i = colideGroup.children.length - 1; i >= 0; i--) {
@@ -708,9 +709,9 @@ function playerBreak(x, y, z){
     const pos = obj.position;
 
     if (
-      Math.abs(pos.x - x) < tolerance &&
-      Math.abs(pos.y - y) < tolerance &&
-      Math.abs(pos.z - z) < tolerance
+      Math.abs(pos.x - x) <= tolerance &&
+      Math.abs(pos.y - y) <= tolerance &&
+      Math.abs(pos.z - z) <= tolerance
     ) {
       scene.remove(obj);            // Remove from scene
       colideGroup.remove(obj);      // Remove from collision group
