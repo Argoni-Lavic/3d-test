@@ -27,6 +27,9 @@ let terrain = [];
 let grassColor = 0x228B22;
 let grassColorVariance = 0.1;
 
+let foundationColor = 0xa9a9a9;
+let foundationColorVariance = 0.2;
+
 let minimumPlayerY = 0;
 let playerHeight = 1.6;
 
@@ -484,8 +487,8 @@ function player(){
         
           const rightSlope = new THREE.Vector3().crossVectors(forwardSlope, camera.up).normalize();
         
-          cameraHolder.position.add(forwardSlope.multiplyScalar(velocity.z / (slopeAngle - 14)));
-          cameraHolder.position.add(rightSlope.multiplyScalar(velocity.x / (slopeAngle - 14)));
+          cameraHolder.position.add(forwardSlope.multiplyScalar(velocity.z /(5 / (slopeAngle - 14))));
+          cameraHolder.position.add(rightSlope.multiplyScalar(velocity.x / (5 / (slopeAngle - 14))));
         
           // Clamp to terrain height
           cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true) + playerHeight;
@@ -719,7 +722,7 @@ function playerBreak(x, y, z){
 function playerPlace(x, y, z) {
   const machine = new THREE.Mesh(
     new THREE.BoxGeometry(2, 2, 2),
-    new THREE.MeshStandardMaterial({ color: 0xff0000 })
+    new THREE.MeshStandardMaterial({ color: randomizeColor(foundationColor, foundationColorVariance) })
   );
 
   machine.position.x = x;
