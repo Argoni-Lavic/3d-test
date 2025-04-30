@@ -133,7 +133,7 @@ colideGroup.add(machine2);
     if (event.button === 0) {
       playerLeftClick();
     } else if (event.button === 2) {
-      console.log('Right click!');
+      playerRightClick();
     }
   });
 
@@ -177,7 +177,7 @@ dir.setFromSphericalCoords(
 );
   target.position.x = Math.round(x + dir.x * -1);
   target.position.z = Math.round(z + dir.z * -1);
-  const groundLevel = Math.round(getGroundLevel(target.position.x, y, target.position.z, true));
+  const groundLevel = Math.round(getGroundLevel(target.position.x, y, target.position.z, false));
   const calcY = Math.round(y + dir.y) + 1;
   if (groundLevel < calcY){
     target.position.y = calcY;
@@ -625,8 +625,32 @@ function anyKeyPressed() {
   return false;
 }
 
+function playerRightClick(){
+  playerBreak(placementOutline.position.x, placementOutline.position.y, placementOutline.position.z);
+}
+
 function playerLeftClick(){
   playerPlace();
+}
+
+function playerBreak(x, y, z){
+  const tolerance = 0.01; // helps with floating-point precision
+
+  // Search for matching object in the collision group
+  for (let i = colideGroup.children.length - 1; i >= 0; i--) {
+    const obj = colideGroup.children[i];
+    const pos = obj.position;
+
+    if (
+      Math.abs(pos.x - x) < tolerance &&
+      Math.abs(pos.y - y) < tolerance &&
+      Math.abs(pos.z - z) < tolerance
+    ) {
+      scene.remove(obj);            // Remove from scene
+      colideGroup.remove(obj);      // Remove from collision group
+      break; // Stop after removing one
+    }
+  }
 }
 
 function playerPlace() {
