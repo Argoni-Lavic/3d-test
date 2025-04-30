@@ -34,10 +34,7 @@ let selectedSlotIndex = -1;
 let hotbarSlots = [];
 let slotGlows = [];
 let interactionDistance = 5;
-
-let raycaster, intersectedObject;
-let machineGeometry, machineMaterial;
-let placedMachines = [];
+let placementCorectionOffset = -2;
 
 // Create a texture loader
 const textureLoader = new THREE.TextureLoader();
@@ -478,11 +475,19 @@ function player(){
           // Revert movement on steep slope
           cameraHolder.position.x = prevX;
           cameraHolder.position.z = prevZ;
-  
-          cameraHolder.position.add(forward.clone().multiplyScalar(velocity.z / (5 / (slopeAngle - 14))));
-          cameraHolder.position.add(right.clone().multiplyScalar(velocity.x / (5 / (slopeAngle - 14))));
-      
-          // Clamp to previous terrain height
+        
+          // Recalculate forward and right vectors for clean direction
+          const forwardSlope = new THREE.Vector3();
+          camera.getWorldDirection(forwardSlope);
+          forwardSlope.y = 0;
+          forwardSlope.normalize();
+        
+          const rightSlope = new THREE.Vector3().crossVectors(forwardSlope, camera.up).normalize();
+        
+          cameraHolder.position.add(forwardSlope.multiplyScalar(velocity.z / (slopeAngle - 14)));
+          cameraHolder.position.add(rightSlope.multiplyScalar(velocity.x / (slopeAngle - 14)));
+        
+          // Clamp to terrain height
           cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true) + playerHeight;
         }else if(slopeAngle > 70){
           cameraHolder.position.x = prevX;
@@ -562,6 +567,7 @@ function getHighestObjectBelowY(x, maxY, z, tolerance = 0.1, group) {
         Math.abs(object.position.x - x) < bbox.max.x + tolerance &&
         Math.abs(object.position.z - z) < bbox.max.z + tolerance &&
         object.position.y <= maxY
+  
       ) {
         // Get the top Y value of the object's bounding box
         const objectTopY = object.position.y + bbox.max.y;
@@ -599,6 +605,23 @@ function updateChunkVisibility() {
   }
 }
 
+function checkForBlockAt(x, y, z, tolerance = 0.1) {
+
+  for (let obj of colideGroup.children) {
+    const pos = obj.position;
+
+    if (
+      Math.abs(pos.x - x) < tolerance &&
+      Math.abs(pos.y - y) < tolerance &&
+      Math.abs(pos.z - z) < tolerance
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function selectSlot(index) {
   // Reset previous slot
   if (selectedSlotIndex !== -1) {
@@ -629,8 +652,48 @@ function playerRightClick(){
   playerBreak(placementOutline.position.x, placementOutline.position.y, placementOutline.position.z);
 }
 
-function playerLeftClick(){
-  playerPlace();
+function playerLeftClick() {
+  const origin = placementOutline.position.clone();
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+
+  // Snap direction to the nearest axis for block grid alignment
+  const step = new THREE.Vector3(
+    Math.round(dir.x),
+    Math.round(dir.y),
+    Math.round(dir.z)
+  );
+
+  // If camera is angled between axes (e.g., diagonals), snap to the dominant axis
+  if (Math.abs(step.x) >= Math.abs(step.y) && Math.abs(step.x) >= Math.abs(step.z)) {
+    step.set(Math.sign(step.x), 0, 0);
+  } else if (Math.abs(step.y) >= Math.abs(step.x) && Math.abs(step.y) >= Math.abs(step.z)) {
+    step.set(0, Math.sign(step.y), 0);
+  } else {
+    step.set(0, 0, Math.sign(step.z));
+  }
+
+  step.multiplyScalar(placementCorectionOffset);
+
+  // Walk along the direction until a free space is found
+  const maxSteps = 10;
+  let placement = origin.clone();
+  let steps = 0;
+
+  while (checkForBlockAt(placement.x, placement.y, placement.z) && steps < maxSteps) {
+    placement.add(step);
+    steps++;
+  }
+
+  // Optionally align to ground level
+  const groundLevel = Math.round(getGroundLevel(placement.x, placement.y, placement.z));
+  if (groundLevel > placement.y) {
+    placement.y = groundLevel;
+  }
+
+  if (!checkForBlockAt(placement.x, placement.y, placement.z)){
+    playerPlace(placement.x, placement.y, placement.z);
+  }
 }
 
 function playerBreak(x, y, z){
@@ -653,15 +716,15 @@ function playerBreak(x, y, z){
   }
 }
 
-function playerPlace() {
+function playerPlace(x, y, z) {
   const machine = new THREE.Mesh(
     new THREE.BoxGeometry(2, 2, 2),
     new THREE.MeshStandardMaterial({ color: 0xff0000 })
   );
 
-  machine.position.x = placementOutline.position.x;
-  machine.position.y = placementOutline.position.y;
-  machine.position.z = placementOutline.position.z;
+  machine.position.x = x;
+  machine.position.y = y;
+  machine.position.z = z;
   scene.add(machine);
   colideGroup.add(machine);
 }
