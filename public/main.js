@@ -36,8 +36,13 @@ let grassColorVariance = 0.1;
 let foundationColor = 0xa9a9a9;
 let foundationColorVariance = 0.2;
 
+let treeTrunkColor = 0x8B4513;
+let treeTrunkVariance = 0.1;
+let treeLeafColor = 0x228B22;
+let treeLeafVariance = 0.1;
+
 let minimumPlayerY = 0;
-let playerHeight = 1.6;
+let playerHeight = 1.6 * 2;
 
 let selectedSlotIndex = -1;
 let hotbarSlots = [];
@@ -47,6 +52,7 @@ let inventoryOpen = true;
 
 let interactionDistance = 5;
 let placementCorectionOffset = -1;
+let ledgeClimbDistance = playerHeight * 0.75;
 
 // Create a texture loader
 const textureLoader = new THREE.TextureLoader();
@@ -114,7 +120,6 @@ colideGroup.add(machine2);
   createTrees();
 
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, gridSize * 2.1);
-  camera.position.y = playerHeight;
   
   cameraHolder = new THREE.Object3D();
   cameraHolder.add(camera);
@@ -258,6 +263,7 @@ function createUI() {
 }
 
 function createTrees(){
+
   tree = createTree(500, getGroundLevel(500, 100, 500), 500, 6);
   scene.add(tree);
   colideGroup.add(tree);
@@ -267,7 +273,7 @@ function createTree(x, y, z, size = 1) {
   const trunkHeight = 2 * size;
   const trunk = new THREE.Mesh(
     new THREE.CylinderGeometry(0.2 * size, 0.2 * size, trunkHeight),
-    new THREE.MeshStandardMaterial({ color: 0x8B4513 })
+    new THREE.MeshStandardMaterial({ color: randomizeColor(treeTrunkColor, treeTrunkVariance) })
   );
   trunk.position.y = trunkHeight / 2;
 
@@ -279,7 +285,7 @@ function createTree(x, y, z, size = 1) {
     const coneHeight = 1 * size;
     const cone = new THREE.Mesh(
       new THREE.ConeGeometry((1.5 - i * 0.3) * size, coneHeight, 8),
-      new THREE.MeshStandardMaterial({ color: 0x228B22 })
+      new THREE.MeshStandardMaterial({ color: randomizeColor(treeLeafColor, treeLeafVariance) })
     );
     cone.position.y = trunkHeight + i * coneHeight * 0.6;
     cone.userData.shape = 'cone';
@@ -568,11 +574,11 @@ function player(){
       cameraHolder.position.y = groundLevel + playerHeight;
     }
     if (keys['Space'] && onGround) {
-      yVelocity = 0.2; // jump
+      yVelocity = 0.4; // jump
       onGround = false;
     }
     
-    if (onGround && prevOnGround) {
+    if (velocity.x !== 0 || velocity.z !== 0) {
       const newGroundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y - playerHeight, cameraHolder.position.z, true);
       const prevGroundLevel = getGroundLevel(prevX, prevY, prevZ, true);
     
@@ -580,45 +586,33 @@ function player(){
       const dz = cameraHolder.position.z - prevZ;
       const dy = newGroundLevel - prevGroundLevel;
     
-      const horizontalDist = Math.sqrt(dx * dx + dz * dz);
-      if (horizontalDist === 0) {
-        horizontalDist = 0.000001;
-      }
+      let horizontalDist = Math.sqrt(dx * dx + dz * dz);
+      if (horizontalDist === 0) horizontalDist = 0.000001;
     
       const slopeAngle = Math.atan2(Math.abs(dy), horizontalDist) * (180 / Math.PI);
-
-      if (dy < 0){
-      }else{
+    
+      if (dy > ledgeClimbDistance) {
+        const forwardSlope = new THREE.Vector3();
+        camera.getWorldDirection(forwardSlope);
+        forwardSlope.y = 0;
+        forwardSlope.normalize();
+    
+        const rightSlope = new THREE.Vector3().crossVectors(forwardSlope, camera.up).normalize();
+    
         if (slopeAngle > 15 && slopeAngle <= 70) {
-          // Revert movement on steep slope
           cameraHolder.position.x = prevX;
           cameraHolder.position.z = prevZ;
-        
-          // Recalculate forward and right vectors for clean direction
-          const forwardSlope = new THREE.Vector3();
-          camera.getWorldDirection(forwardSlope);
-          forwardSlope.y = 0;
-          forwardSlope.normalize();
-        
-          const rightSlope = new THREE.Vector3().crossVectors(forwardSlope, camera.up).normalize();
-        
-          cameraHolder.position.add(forwardSlope.multiplyScalar(velocity.z /(5 / (slopeAngle - 14))));
-          cameraHolder.position.add(rightSlope.multiplyScalar(velocity.x / (5 / (slopeAngle - 14))));
-        
-          // Clamp to terrain height
-          cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y - playerHeight, cameraHolder.position.z, true) + playerHeight;
-        }else if(slopeAngle > 70){
-          
-          // Revert movement on steep slope
+          cameraHolder.position.add(forwardSlope.multiplyScalar(velocity.z / ((slopeAngle - 10) / 5)));
+          cameraHolder.position.add(rightSlope.multiplyScalar(velocity.x / ((slopeAngle - 10) / 5)));
+          //cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y - (playerHeight / 0.75), cameraHolder.position.z, true) + playerHeight;
+        } else if (slopeAngle > 70) {
           cameraHolder.position.x = prevX;
           cameraHolder.position.z = prevZ;
-          getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true) + playerHeight;
+          cameraHolder.position.y = prevY + playerHeight;
+          return;
         }
       }
     }
-
-
-    
     if(cameraHolder.position.x < 0.5){
       cameraHolder.position.x = 0.5;
     }else if (cameraHolder.position.x > gridSize - 1.5){
@@ -757,14 +751,17 @@ function updateChunkVisibility() {
     chunk.visible = chunkCenter.distanceTo(playerPos) < (renderDistance * chunkSize);
   }
 
-  for (const item of colideGroup.children) {
-    if (!item.geometry) continue;
-    const itemCenter = new THREE.Vector3();
-    item.geometry.boundingSphere || item.geometry.computeBoundingSphere();
-    itemCenter.copy(item.geometry.boundingSphere.center).add(item.position);
+  colideGroup.traverse((object) => {
+    if (object instanceof THREE.Mesh && object.geometry) {
+      const sphere = object.geometry.boundingSphere || object.geometry.computeBoundingSphere();
 
-    item.visible = itemCenter.distanceTo(playerPos) < (renderDistance * chunkSize);
-  }
+      const center = new THREE.Vector3();
+      center.copy(object.geometry.boundingSphere.center);
+      object.localToWorld(center);
+
+      object.visible = center.distanceTo(playerPos) < (renderDistance * chunkSize);
+    }
+  });
 }
 
 function checkForBlockAt(x, y, z, tolerance = 0.1) {
