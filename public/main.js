@@ -7,7 +7,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 //vars------------------------------------------------
 
 
-let scene, camera, cameraHolder, renderer, UIholder, key, colideGroup, placementOutline, inventoryHolder, inventoryPanel;
+let scene, camera, cameraHolder, renderer, UIholder, key, colideGroup, placementOutline, inventoryHolder, inventoryPanel, tree;
 let keys = {};
 let keyDown = false;
 
@@ -258,7 +258,7 @@ function createUI() {
 }
 
 function createTrees(){
-  const tree = createTree(500, getGroundLevel(500, 100, 500), 500, 6);
+  tree = createTree(500, getGroundLevel(500, 100, 500), 500, 6);
   scene.add(tree);
   colideGroup.add(tree);
 }
@@ -282,6 +282,7 @@ function createTree(x, y, z, size = 1) {
       new THREE.MeshStandardMaterial({ color: 0x228B22 })
     );
     cone.position.y = trunkHeight + i * coneHeight * 0.6;
+    cone.userData.shape = 'cone';
     tree.add(cone);
   }
 
@@ -289,9 +290,6 @@ function createTree(x, y, z, size = 1) {
   tree.position.set(x, y, z);
   return tree;
 }
-
-
-
 
 function createGround() {
   // Generate terrain heights
@@ -608,14 +606,19 @@ function player(){
           cameraHolder.position.add(rightSlope.multiplyScalar(velocity.x / (5 / (slopeAngle - 14))));
         
           // Clamp to terrain height
-          cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true) + playerHeight;
+          cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y - playerHeight, cameraHolder.position.z, true) + playerHeight;
         }else if(slopeAngle > 70){
+          
+          // Revert movement on steep slope
           cameraHolder.position.x = prevX;
           cameraHolder.position.z = prevZ;
-          cameraHolder.position.y = prevY + playerHeight;
+          getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true) + playerHeight;
         }
       }
     }
+
+
+    
     if(cameraHolder.position.x < 0.5){
       cameraHolder.position.x = 0.5;
     }else if (cameraHolder.position.x > gridSize - 1.5){
@@ -676,26 +679,61 @@ function getHighestObjectBelowY(x, maxY, z, tolerance = 0.1, group) {
   let highestObject = null;
 
   group.traverse((object) => {
-    if (object instanceof THREE.Mesh && object.geometry) {
+    if (object instanceof THREE.Mesh && object.geometry && object.children.length == 0) {
       object.geometry.computeBoundingBox();
 
-      const worldPos = new THREE.Vector3();
-      object.getWorldPosition(worldPos);
-
       const bbox = object.geometry.boundingBox.clone();
-      bbox.applyMatrix4(object.matrixWorld); // move bbox into world coords
+      bbox.applyMatrix4(object.matrixWorld); // convert to world space
 
-      const bboxCenterX = (bbox.min.x + bbox.max.x) / 2;
-      const bboxCenterZ = (bbox.min.z + bbox.max.z) / 2;
-      const bboxTopY = bbox.max.y;
+      //const helper = new THREE.Box3Helper(bbox, 0xffff00);
+      //scene.add(helper);
 
-      if (
-        Math.abs(bboxCenterX - x) < (bbox.max.x - bbox.min.x) / 2 + tolerance &&
-        Math.abs(bboxCenterZ - z) < (bbox.max.z - bbox.min.z) / 2 + tolerance &&
-        bbox.min.y <= maxY
-      ) {
-        if (bboxTopY > highestY) {
-          highestY = bboxTopY;
+      const objectTopY = bbox.max.y;
+
+      // Skip if object is above maxY entirely
+      if (bbox.min.y > maxY) return;
+
+      // --- Cone shape ---
+      if (object.userData.shape === 'cone') {
+        const height = bbox.max.y - bbox.min.y;
+        const radius = (bbox.max.x - bbox.min.x) / 2;
+        const coneTipY = bbox.max.y;
+
+        const yFromTip = coneTipY - maxY;
+        if (yFromTip < 0 || yFromTip > height) return; // outside cone height
+
+        const effectiveRadius = (yFromTip / height) * radius;
+
+        const objectCenter = new THREE.Vector3();
+        object.getWorldPosition(objectCenter);
+
+        const dx = x - objectCenter.x;
+        const dz = z - objectCenter.z;
+        const distXZ = Math.sqrt(dx * dx + dz * dz);
+
+        if (distXZ <= effectiveRadius + tolerance) {
+          // Compute surface Y at this XZ distance
+          const surfaceHeight = (1 - (distXZ / radius)) * height; // from base to tip
+          const surfaceY = bbox.min.y + surfaceHeight;
+        
+          if (surfaceY > highestY) {
+            highestY = surfaceY;
+            highestObject = object;
+          }
+        }
+        
+      }else{
+
+        // --- Default shape ---
+        const bboxCenterX = (bbox.min.x + bbox.max.x) / 2;
+        const bboxCenterZ = (bbox.min.z + bbox.max.z) / 2;
+
+        if (
+          Math.abs(bboxCenterX - x) < (bbox.max.x - bbox.min.x) / 2 + tolerance &&
+          Math.abs(bboxCenterZ - z) < (bbox.max.z - bbox.min.z) / 2 + tolerance &&
+          objectTopY > highestY
+        ) {
+          highestY = objectTopY;
           highestObject = object;
         }
       }
@@ -704,6 +742,8 @@ function getHighestObjectBelowY(x, maxY, z, tolerance = 0.1, group) {
 
   return highestObject ? highestY : -Infinity;
 }
+
+
 
 
 function updateChunkVisibility() {
@@ -732,26 +772,50 @@ function checkForBlockAt(x, y, z, tolerance = 0.1) {
   const point = new THREE.Vector3(x, y, z);
 
   colideGroup.traverse((obj) => {
-    if (found) return; // early exit for performance
+    if (found) return;
 
-    if (obj instanceof THREE.Mesh && obj.geometry) {
+    if (obj instanceof THREE.Mesh && obj.geometry && obj.children.length === 0) {
       obj.geometry.computeBoundingBox();
-
-      // Clone and move bounding box into world space
       const bbox = obj.geometry.boundingBox.clone();
-      bbox.applyMatrix4(obj.matrixWorld);
+      bbox.applyMatrix4(obj.matrixWorld); // World-space bbox
 
-      // Expand slightly to allow tolerance (if needed)
-      bbox.expandByScalar(tolerance);
+      if (obj.userData.shape === 'cone') {
+        // Cone-specific check
+        const height = bbox.max.y - bbox.min.y;
+        const radius = (bbox.max.x - bbox.min.x) / 2;
+        const coneTipY = bbox.max.y;
 
-      if (bbox.containsPoint(point)) {
-        found = true;
+        // Check Y range
+        const yFromTip = coneTipY - point.y;
+        if (yFromTip < 0 || yFromTip > height) return;
+
+        // Check XZ radius at this height
+        const effectiveRadius = (yFromTip / height) * radius;
+
+        const center = new THREE.Vector3();
+        obj.getWorldPosition(center);
+
+        const dx = x - center.x;
+        const dz = z - center.z;
+        const distXZ = Math.sqrt(dx * dx + dz * dz);
+
+        if (distXZ <= effectiveRadius + tolerance) {
+          found = true;
+        }
+
+      } else {
+        // Default shape (bounding box)
+        const expandedBox = bbox.clone().expandByScalar(tolerance);
+        if (expandedBox.containsPoint(point)) {
+          found = true;
+        }
       }
     }
   });
 
   return found;
 }
+
 
 function selectSlot(index) {
   // Reset previous slot
@@ -821,7 +885,7 @@ function playerLeftClick() {
   let placement = origin.clone();
   let steps = 0;
 
-  while (checkForBlockAt(placement.x, placement.y, placement.z, 1) && steps < maxSteps) {
+  while (checkForBlockAt(placement.x, placement.y, placement.z) && steps < maxSteps) {
     placement.add(step);
     steps++;
   }
@@ -832,7 +896,7 @@ function playerLeftClick() {
     placement.y = groundLevel;
   }
 
-  if (!checkForBlockAt(placement.x, placement.y, placement.z, 1)){
+  if (!checkForBlockAt(placement.x, placement.y, placement.z)){
     playerPlace(placement.x, placement.y, placement.z);
   }
 }
