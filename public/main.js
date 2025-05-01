@@ -111,6 +111,7 @@ colideGroup.add(machine2);
   scene.add(sky);
 
   createUI();
+  createTrees();
 
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, gridSize * 2.1);
   camera.position.y = playerHeight;
@@ -148,9 +149,13 @@ colideGroup.add(machine2);
 
   window.addEventListener('mousedown', (event) => {
     if (event.button === 0) {
-      playerLeftClick();
+      if(!inventoryOpen){
+        playerLeftClick();
+      }
     } else if (event.button === 2) {
-      playerRightClick();
+      if(!inventoryOpen){
+        playerRightClick();
+      }
     }
   });
 
@@ -174,14 +179,15 @@ colideGroup.add(machine2);
 }
 
 function onMouseMove(e) {
-  const sensitivity = 0.002;
-  cameraHolder.rotation.y -= e.movementX * sensitivity;
+  if(!inventoryOpen){
+    const sensitivity = 0.002;
+    cameraHolder.rotation.y -= e.movementX * sensitivity;
 
-  pitch -= e.movementY * sensitivity;
-  pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
-  camera.rotation.x = pitch;
+    pitch -= e.movementY * sensitivity;
+    pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+    camera.rotation.x = pitch;
 
-  // Get the facing coordinates using raycasting on the correct groups
+  }
 }
 
 
@@ -250,6 +256,42 @@ function createUI() {
   UIholder.add(inventoryHolder);
   //inventoryHolder.material.opacity = 0;
 }
+
+function createTrees(){
+  const tree = createTree(500, getGroundLevel(500, 100, 500), 500, 6);
+  scene.add(tree);
+  colideGroup.add(tree);
+}
+
+function createTree(x, y, z, size = 1) {
+  const trunkHeight = 2 * size;
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.2 * size, 0.2 * size, trunkHeight),
+    new THREE.MeshStandardMaterial({ color: 0x8B4513 })
+  );
+  trunk.position.y = trunkHeight / 2;
+
+  const tree = new THREE.Group();
+  tree.add(trunk);
+
+  // Add 3 layered cones for leaves
+  for (let i = 0; i < 3; i++) {
+    const coneHeight = 1 * size;
+    const cone = new THREE.Mesh(
+      new THREE.ConeGeometry((1.5 - i * 0.3) * size, coneHeight, 8),
+      new THREE.MeshStandardMaterial({ color: 0x228B22 })
+    );
+    cone.position.y = trunkHeight + i * coneHeight * 0.6;
+    tree.add(cone);
+  }
+
+  // Move entire tree to (x, y, z)
+  tree.position.set(x, y, z);
+  return tree;
+}
+
+
+
 
 function createGround() {
   // Generate terrain heights
@@ -630,29 +672,30 @@ function getGroundLevel(x, y, z, colideWithOtherObjects = false) {
 }
 
 function getHighestObjectBelowY(x, maxY, z, tolerance = 0.1, group) {
-  let highestY = -Infinity;  // Initialize to a very low number
-  let highestObject = null;  // Object that holds the highest y
+  let highestY = -Infinity;
+  let highestObject = null;
 
-  // Loop through all objects in the group
   group.traverse((object) => {
-    if (object instanceof THREE.Mesh) {
-      // Ensure bounding box is updated for the mesh
+    if (object instanceof THREE.Mesh && object.geometry) {
       object.geometry.computeBoundingBox();
-      const bbox = object.geometry.boundingBox;
 
-      // Check if the object is within the x, z tolerance and below maxY
+      const worldPos = new THREE.Vector3();
+      object.getWorldPosition(worldPos);
+
+      const bbox = object.geometry.boundingBox.clone();
+      bbox.applyMatrix4(object.matrixWorld); // move bbox into world coords
+
+      const bboxCenterX = (bbox.min.x + bbox.max.x) / 2;
+      const bboxCenterZ = (bbox.min.z + bbox.max.z) / 2;
+      const bboxTopY = bbox.max.y;
+
       if (
-        Math.abs(object.position.x - x) < bbox.max.x + tolerance &&
-        Math.abs(object.position.z - z) < bbox.max.z + tolerance &&
-        object.position.y <= maxY
-  
+        Math.abs(bboxCenterX - x) < (bbox.max.x - bbox.min.x) / 2 + tolerance &&
+        Math.abs(bboxCenterZ - z) < (bbox.max.z - bbox.min.z) / 2 + tolerance &&
+        bbox.min.y <= maxY
       ) {
-        // Get the top Y value of the object's bounding box
-        const objectTopY = object.position.y + bbox.max.y;
-
-        // Update highestY if this object is the highest one encountered
-        if (objectTopY > highestY) {
-          highestY = objectTopY;
+        if (bboxTopY > highestY) {
+          highestY = bboxTopY;
           highestObject = object;
         }
       }
@@ -661,6 +704,7 @@ function getHighestObjectBelowY(x, maxY, z, tolerance = 0.1, group) {
 
   return highestObject ? highestY : -Infinity;
 }
+
 
 function updateChunkVisibility() {
   const playerPos = cameraHolder.position;
@@ -684,20 +728,29 @@ function updateChunkVisibility() {
 }
 
 function checkForBlockAt(x, y, z, tolerance = 0.1) {
+  let found = false;
+  const point = new THREE.Vector3(x, y, z);
 
-  for (let obj of colideGroup.children) {
-    const pos = obj.position;
+  colideGroup.traverse((obj) => {
+    if (found) return; // early exit for performance
 
-    if (
-      Math.abs(pos.x - x) <= tolerance &&
-      Math.abs(pos.y - y) <= tolerance &&
-      Math.abs(pos.z - z) <= tolerance
-    ) {
-      return true;
+    if (obj instanceof THREE.Mesh && obj.geometry) {
+      obj.geometry.computeBoundingBox();
+
+      // Clone and move bounding box into world space
+      const bbox = obj.geometry.boundingBox.clone();
+      bbox.applyMatrix4(obj.matrixWorld);
+
+      // Expand slightly to allow tolerance (if needed)
+      bbox.expandByScalar(tolerance);
+
+      if (bbox.containsPoint(point)) {
+        found = true;
+      }
     }
-  }
+  });
 
-  return false;
+  return found;
 }
 
 function selectSlot(index) {
