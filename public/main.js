@@ -46,8 +46,12 @@ let treeTrunkColor = 0x8B4513;
 let treeTrunkVariance = 0.1;
 let treeLeafColor = 0x228B22;
 let treeLeafVariance = 0.1;
+let minTreeSize = 6;
+let maxTreeSize = 12;
+let treeSpawnRate = 2;
+let minTreeGenHeight = 5;
+let maxTreeGenHeight = 80;
 
-let minimumPlayerY = 0;
 let playerHeight = 1.6 * 2;
 
 let selectedSlotIndex = -1;
@@ -269,10 +273,18 @@ function createUI() {
 }
 
 function createTrees(){
-
-  tree = createTree(500, getGroundLevel(500, 100, 500), 500, 6);
-  scene.add(tree);
-  colideGroup.add(tree);
+  for (let x = 0; x < gridSize; x++){
+    for (let z = 0; z < gridSize; z++){
+      if (randomBetween(0, 1000) <= treeSpawnRate){
+        const y = getGroundLevel(x, 100, z);
+        if (y > minTreeGenHeight && y < maxTreeGenHeight){
+          tree = createTree(x, y, z, randomBetween(minTreeSize, maxTreeSize));
+          scene.add(tree);
+          colideGroup.add(tree);
+        }
+      }
+    }
+  }
 }
 
 function createTree(x, y, z, size = 1) {
@@ -299,7 +311,7 @@ function createTree(x, y, z, size = 1) {
   }
 
   // Move entire tree to (x, y, z)
-  tree.position.set(x, y, z);
+  tree.position.set(x + 0.5, y, z + 0.5);
   return tree;
 }
 
@@ -376,6 +388,10 @@ function randomizeColor(hex, variance = 0.1) {
   hsl.s += (Math.random() - 0.5) * variance;
   hsl.l += (Math.random() - 0.5) * variance;
   return new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
+}
+
+function randomBetween(min, max) {
+  return Math.random() * (max - min) + min;
 }
 
 function randGrid(x, z) {
@@ -566,8 +582,7 @@ function player(){
     onGround = false;
   } else {
     // Gravity and jump
-    const groundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true);
-    //const groundLevel = 0;
+    const groundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y - playerHeight, cameraHolder.position.z, true);
     if (cameraHolder.position.y > groundLevel + playerHeight) {
       if (!yVelocity >= -53.8){ //player terminal velocity
         yVelocity -= 0.01; // gravity
@@ -585,12 +600,11 @@ function player(){
     }
     
     if (velocity.x !== 0 || velocity.z !== 0) {
-      const newGroundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y - playerHeight, cameraHolder.position.z, true);
       const prevGroundLevel = getGroundLevel(prevX, prevY, prevZ, true);
     
       const dx = cameraHolder.position.x - prevX;
       const dz = cameraHolder.position.z - prevZ;
-      const dy = newGroundLevel - prevGroundLevel;
+      const dy = groundLevel - prevGroundLevel;
     
       let horizontalDist = Math.sqrt(dx * dx + dz * dz);
       if (horizontalDist === 0) horizontalDist = 0.000001;
