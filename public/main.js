@@ -13,6 +13,7 @@ let keyDown = false;
 
 let velocity = new THREE.Vector3();
 let moveSpeed = 0.5;
+let playerJumpVelocity = 0.3;
 let pitch = 0;
 let isFlying = false;
 let yVelocity = 0;
@@ -102,26 +103,26 @@ function init() {
   createGround();
 
   // Create a group to hold machines
-colideGroup = new THREE.Group();
-scene.add(colideGroup);
+  colideGroup = new THREE.Group();
+  scene.add(colideGroup);
 
-// Add machines to the group (example with cubes representing machines)
-const machine1 = new THREE.Mesh(new THREE.BoxGeometry(50, 1, 50), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
-machine1.position.set(440, 5, 520);
-colideGroup.add(machine1);
+  // Add machines to the group (example with cubes representing machines)
+  const machine1 = new THREE.Mesh(new THREE.BoxGeometry(50, 1, 50), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
+  machine1.position.set(440, 5, 520);
+  colideGroup.add(machine1);
 
-const machine2 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x00ff00 }));
-colideGroup.add(machine2);
+  const machine2 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x00ff00 }));
+  colideGroup.add(machine2);
 
   // Camera, Holder, and sky
   // Create a large inverted sphere to act as the sky
   const skyGeometry = new THREE.SphereGeometry(gridSize * 1, 8, 8);
   const skyMaterial = new THREE.MeshBasicMaterial({
-  map: skyTexture,        // Apply the night sky texture
-  side: THREE.BackSide,   // Render the inside of the sphere
-  opacity: 0.9,           // Optional: add slight transparency for better blending
-  transparent: true       // Allow transparency if needed
-});
+    map: skyTexture,        // Apply the night sky texture
+    side: THREE.BackSide,   // Render the inside of the sphere
+    opacity: 0.9,           // Optional: add slight transparency for better blending
+    transparent: true       // Allow transparency if needed
+  });
   const sky = new THREE.Mesh(skyGeometry, skyMaterial);
   sky.position.set(gridSize / 2, 0, gridSize / 2);
   scene.add(sky);
@@ -208,11 +209,11 @@ function onMouseMove(e) {
 
 function setPlaceOutline(x, y, z, rotationx, rotationy, target) {
   const dir = new THREE.Vector3();
-dir.setFromSphericalCoords(
-  interactionDistance,
-  Math.PI / 2 - rotationx, // polar angle (theta)
-  rotationy               // azimuthal angle (phi)
-);
+  dir.setFromSphericalCoords(
+    interactionDistance,
+    Math.PI / 2 - rotationx, // polar angle (theta)
+    rotationy               // azimuthal angle (phi)
+  );
   target.position.x = Math.round(x + dir.x * -1);
   target.position.z = Math.round(z + dir.z * -1);
   const groundLevel = Math.round(getGroundLevel(target.position.x, y, target.position.z, false));
@@ -225,7 +226,9 @@ dir.setFromSphericalCoords(
   
 }
 
+
 //object creators------------------------------------------------
+
 
 function createUI() {
   UIholder = new THREE.Object3D();
@@ -377,8 +380,6 @@ function createGround() {
     }
   }
 }
-
-
 
 function randomizeColor(hex, variance = 0.1) {
   const base = new THREE.Color(hex);
@@ -534,7 +535,7 @@ function player(){
     inventoryOpen = !inventoryOpen;
     keys['KeyE'] = false;
   }
-
+  
   velocity.set(0, 0, 0);
 
   if (keys['KeyW']) {
@@ -595,7 +596,7 @@ function player(){
       cameraHolder.position.y = groundLevel + playerHeight;
     }
     if (keys['Space'] && onGround) {
-      yVelocity = 0.4; // jump
+      yVelocity = playerJumpVelocity; // jump
       onGround = false;
     }
     
