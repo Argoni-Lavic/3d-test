@@ -7,7 +7,8 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 //vars------------------------------------------------
 
 
-let scene, camera, cameraHolder, renderer, UIholder, key, colideGroup, placementOutline, inventoryHolder, inventoryPanel, tree;
+let scene, camera, cameraHolder, renderer, UIholder, key, colideGroupMaster, placementOutline, inventoryHolder, inventoryPanel, tree;
+let colideGroup = [];
 let keys = {};
 let keyDown = false;
 
@@ -19,9 +20,10 @@ let isFlying = false;
 let yVelocity = 0;
 let onGround = false;
 
-let gridSize = 1000;
 let chunkSize = 25;
 let chunkMeshes = [];
+let gridSizeInChunks = 40;
+let gridSize = gridSizeInChunks * chunkSize;
 let renderDistance = 5;
 let renderDistanceSquared = (renderDistance * chunkSize) ** 2;
 
@@ -102,17 +104,15 @@ function init() {
 
   createGround();
 
-  // Create a group to hold machines
-  colideGroup = new THREE.Group();
-  scene.add(colideGroup);
+  createColideGroup()
 
   // Add machines to the group (example with cubes representing machines)
   const machine1 = new THREE.Mesh(new THREE.BoxGeometry(50, 1, 50), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
   machine1.position.set(440, 5, 520);
-  colideGroup.add(machine1);
+  addToColideGroup(machine1);
 
   const machine2 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x00ff00 }));
-  colideGroup.add(machine2);
+  addToColideGroup(machine2);
 
   // Camera, Holder, and sky
   // Create a large inverted sphere to act as the sky
@@ -283,7 +283,7 @@ function createTrees(){
         if (y > minTreeGenHeight && y < maxTreeGenHeight){
           tree = createTree(x, y, z, randomBetween(minTreeSize, maxTreeSize));
           scene.add(tree);
-          colideGroup.add(tree);
+          addToColideGroup(tree);
         }
       }
     }
@@ -499,6 +499,17 @@ function createRoundedRect(width, height, radius, depth = 0.1, material) {
   return mesh;
 }
 
+function createColideGroup(){
+  colideGroupMaster = new THREE.Group();
+  for (let x = 0; x < gridSizeInChunks; x++) {
+    colideGroup[x] = [];
+    for (let y = 0; y < gridSizeInChunks; y++) {
+      colideGroup[x][y] = new THREE.Group();
+      colideGroupMaster.add(colideGroup[x][y]);
+    }
+  }
+  scene.add(colideGroupMaster);
+}
 
 //main rendering loop------------------------------------------------
 
@@ -693,7 +704,9 @@ function getHighestObjectBelowY(x, maxY, z, tolerance = 0.1, group) {
   let highestY = -Infinity;
   let highestObject = null;
 
-  group.traverse((object) => {
+  const nearbyObjects = getNearbyObjects(x, z);
+
+  nearbyObjects.traverse((object) => {
     if (!(object instanceof THREE.Mesh) || object.children.length > 0 || !object.geometry) return;
 
     if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
@@ -755,24 +768,30 @@ function updateChunkVisibility() {
     chunk.visible = chunkCenter.distanceToSquared(playerPos) < renderDistanceSquared;
   }
 
-  colideGroup.traverse((object) => {
-    if (!(object instanceof THREE.Mesh) || !object.geometry) return;
+  for (let x = 0; x < gridSizeInChunks; x++) {
+    for (let y = 0; y < gridSizeInChunks; y++) {
+      colideGroup[x][y].children.forEach((object) => {
+        if (!(object instanceof THREE.Mesh) || !object.geometry) return;
 
-    const geom = object.geometry;
-    if (!geom.boundingSphere) geom.computeBoundingSphere();
+        const geom = object.geometry;
+        if (!geom.boundingSphere) geom.computeBoundingSphere();
 
-    const center = geom.boundingSphere.center.clone();
-    object.localToWorld(center);
+        const center = geom.boundingSphere.center.clone();
+        object.localToWorld(center);
 
-    object.visible = center.distanceToSquared(playerPos) < renderDistanceSquared;
-  });
+        object.visible = center.distanceToSquared(playerPos) < renderDistanceSquared;
+      });
+    }
+  }
 }
 
 function checkForBlockAt(x, y, z, tolerance = 0.1) {
   let found = false;
   point.set(x, y, z);
 
-  colideGroup.traverse((obj) => {
+  const nearbyObjects = getNearbyObjects(x, z);
+
+  nearbyObjects.traverse((obj) => {
     if (found) return;
 
     if (obj instanceof THREE.Mesh && obj.geometry && obj.children.length === 0) {
@@ -813,7 +832,62 @@ function checkForBlockAt(x, y, z, tolerance = 0.1) {
   return found;
 }
 
+function getGridCoords(position) {
+  const x = Math.floor(position.x / chunkSize) + Math.floor(gridSizeInChunks / 2);
+  const y = Math.floor(position.y / chunkSize) + Math.floor(gridSizeInChunks / 2);
+  return [x, y];
+}
 
+function addToColideGroup(object){
+  const [x, y] = getGridCoords(object.position);
+
+  // Check boundaries to prevent errors
+  if (x >= 0 && x < numCells && y >= 0 && y < numCells) {
+    colideGroup[x][y].add(object);
+    object.gridCoords = [x, y];  // Store the object's current cell
+  }
+}
+
+function updateObjectInColideGroup(object) {
+  const [oldX, oldY] = object.gridCoords;
+  const [newX, newY] = getGridCoords(object.position);
+
+  // Move the object only if it changes cells
+  if (newX !== oldX || newY !== oldY) {
+    // Remove from old subgroup
+    colideGroup[oldX][oldY].remove(object);
+
+    // Add to new subgroup
+    addToColideGroup(object);
+  }
+}
+
+function removeFromColideGroup(object){
+  const [x, y] = getGridCoords(object.position);
+  
+  // Check boundaries to prevent errors
+  if (x >= 0 && x < numCells && y >= 0 && y < numCells) {
+    colideGroup[x][y].remove(object);
+  }
+}
+
+function getNearbyObjects(x, z) {
+  const [gridX, gridY] = getGridCoords({ x, y: 0, z });
+  const nearby = [];
+
+  // Check the current cell and adjacent cells
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dz = -1; dz <= 1; dz++) {
+      const nx = gridX + dx;
+      const nz = gridY + dz;
+
+      if (nx >= 0 && nx < gridSizeInChunks && nz >= 0 && nz < numCells) {
+        nearby.push(...colideGroup[nx][nz].children);
+      }
+    }
+  }
+  return nearby;
+}
 
 function selectSlot(index) {
   // Reset previous slot
@@ -913,7 +987,7 @@ function playerBreak(x, y, z){
       Math.abs(pos.z - z) <= tolerance
     ) {
       scene.remove(obj);            // Remove from scene
-      colideGroup.remove(obj);      // Remove from collision group
+      removeFromColideGroup(obj);      // Remove from collision group
       break; // Stop after removing one
     }
   }
@@ -929,7 +1003,7 @@ function playerPlace(x, y, z) {
   machine.position.y = y;
   machine.position.z = z;
   scene.add(machine);
-  colideGroup.add(machine);
+  addToColideGroup(machine);
 }
 
 
