@@ -59,7 +59,7 @@ let hotbarContents = [
   {id: "empty"},
   {id: "empty"},
   {id: "empty"},
-  {id: "foundation", amount: 10, placeable: true},
+  {id: "pineFoundation", amount: 10, placeable: true},
   {id: "empty"},
   {id: "empty"},
   {id: "empty"},
@@ -82,7 +82,13 @@ let renderPropertys = {
     rotationZ: 0,
   }
 }
+//707061
 let itemProperties = {
+  pineFoundation: {
+    propertyType: "block",
+    color: 0xdeb887,
+    variance: 0
+  },
   foundation: {
     propertyType: "block",
     color: 0xa9a9a9,
@@ -90,6 +96,13 @@ let itemProperties = {
   }
 }
 let blockProperties = {
+  pineFoundation: {
+    sizeX: 2,
+    sizeY: 2,
+    sizeZ: 2,
+    color: 0xdeb887,
+    variance: 0.1
+  },
   foundation: {
     sizeX: 2,
     sizeY: 2,
@@ -202,6 +215,19 @@ function init() {
       if(!inventoryOpen){
         playerRightClick();
       }
+    }
+  });
+
+  window.addEventListener("wheel", (event) => {
+    if (event.deltaY < 0) {
+      key = selectedSlotIndex + 2;
+    } else if (event.deltaY > 0) {
+      key = selectedSlotIndex;
+    }
+    if (key > 8){
+      key = 0;
+    }else if (key < 0){
+      key = 9;
     }
   });
 
@@ -546,7 +572,7 @@ function animate() {
 
 function player(){
 
-  if (key >= 1 && key <= 8) {
+  if (key >= 0 && key <= 9) {
     selectSlot(key - 1);
     key = undefined;
   }
@@ -615,7 +641,7 @@ function player(){
     onGround = false;
   } else {
     // Gravity and jump
-    const groundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y - playerHeight, cameraHolder.position.z, true);
+    const groundLevel = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, true);
     if (cameraHolder.position.y > groundLevel + playerHeight) {
       if (!yVelocity >= -53.8){ //player terminal velocity
         yVelocity -= 0.01; // gravity
@@ -632,7 +658,7 @@ function player(){
       onGround = false;
     }
     
-    if (velocity.x !== 0 || velocity.z !== 0) {
+    if (velocity.x != 0 || velocity.z != 0) {
       const prevGroundLevel = getGroundLevel(prevX, prevY, prevZ, true);
     
       const dx = cameraHolder.position.x - prevX;
@@ -644,7 +670,7 @@ function player(){
     
       const slopeAngle = Math.atan2(Math.abs(dy), horizontalDist) * (180 / Math.PI);
     
-      if (dy > ledgeClimbDistance) {
+      if (dy > ledgeClimbDistance && groundLevel > (prevY - playerHeight)) {
         const forwardSlope = new THREE.Vector3();
         camera.getWorldDirection(forwardSlope);
         forwardSlope.y = 0;
@@ -657,12 +683,13 @@ function player(){
           cameraHolder.position.z = prevZ;
           cameraHolder.position.add(forwardSlope.multiplyScalar(velocity.z / ((slopeAngle - 10) / 5)));
           cameraHolder.position.add(rightSlope.multiplyScalar(velocity.x / ((slopeAngle - 10) / 5)));
-          //cameraHolder.position.y = getGroundLevel(cameraHolder.position.x, cameraHolder.position.y - (playerHeight / 0.75), cameraHolder.position.z, true) + playerHeight;
         } else if (slopeAngle > 70) {
           cameraHolder.position.x = prevX;
           cameraHolder.position.z = prevZ;
           cameraHolder.position.y = prevY + playerHeight;
+          onGround = prevOnGround;
           return;
+          
         }
       }
     }
@@ -877,21 +904,25 @@ function updateGroupInSpatialGrid(group) {
 }
 
 function removeFromSpatialGrid(obj) {
-  const key = getGridKey(obj.position);
-  if (spatialGrid.has(key)) {
-    spatialGrid.get(key).delete(obj);
-    if (spatialGrid.get(key).size === 0) spatialGrid.delete(key);
-  }
-}
-
-function removeGroupFromSpatialGrid(group) {
-  spatialGrid.forEach((set, key) => {
-    if (set.has(group)) {
-      set.delete(group);
-      if (set.size === 0) spatialGrid.delete(key);
+  spatialGrid.forEach((arr, key) => {
+    const index = arr.indexOf(obj);
+    if (index !== -1) {
+      arr.splice(index, 1);  // Remove the object from the array
+      if (arr.length === 0) spatialGrid.delete(key);  // Delete the key if empty
     }
   });
 }
+
+function removeGroupFromSpatialGrid(group) {
+  spatialGrid.forEach((arr, key) => {
+    const index = arr.indexOf(group);
+    if (index !== -1) {
+      arr.splice(index, 1);  // Remove the group from the array
+      if (arr.length === 0) spatialGrid.delete(key);  // Delete the key if the array is empty
+    }
+  });
+}
+
 
 function getGridKey(position) {
   const x = Math.floor(position.x / chunkSize);
@@ -957,7 +988,7 @@ function getGroupBoundingBox(group) {
 
 function selectSlot(index) {
   // Reset previous slot
-  if (selectedSlotIndex !== -1) {
+  if (selectedSlotIndex + 1 >= 1 && selectedSlotIndex + 1 <= 8){
     hotbarSlots[selectedSlotIndex].scale.set(1, 1, 1);
     slotGlows[selectedSlotIndex].material.opacity = 0;
     hotbarSlots[selectedSlotIndex].position.y -= 0.01;
@@ -965,10 +996,12 @@ function selectSlot(index) {
   }
 
   // Apply highlight to selected
-  hotbarSlots[index].scale.set(1.2, 1.2, 1.2); // scale up
-  slotGlows[index].material.opacity = 0.5;     // show glow
-  hotbarSlots[index].position.y += 0.01;
-  slotGlows[index].position.y += 0.01;
+  if (index + 1 >= 1 && index + 1 <= 8){
+    hotbarSlots[index].scale.set(1.2, 1.2, 1.2); // scale up
+    slotGlows[index].material.opacity = 0.5;     // show glow
+    hotbarSlots[index].position.y += 0.01;
+    slotGlows[index].position.y += 0.01;
+  }
   selectedSlotIndex = index;
   updateHotbar();
 }
@@ -1037,7 +1070,11 @@ function anyKeyPressed() {
 }
 
 function playerRightClick(){
+  try{
   playerBreak(placementOutline.position.x, placementOutline.position.y, placementOutline.position.z);
+} catch (error) {
+  alert(error.message);
+}
 }
 
 function playerLeftClick() {
@@ -1092,17 +1129,17 @@ function playerBreak(x, y, z){
 
   // Search for matching object in the collision group
   for (let i = colideGroup.children.length - 1; i >= 0; i--) {
-    const obj = colideGroup.children[i];
-    const pos = obj.position;
+    const machine = colideGroup.children[i];
+    const pos = machine.position;
 
     if (
       Math.abs(pos.x - x) <= tolerance &&
       Math.abs(pos.y - y) <= tolerance &&
       Math.abs(pos.z - z) <= tolerance
     ) {
-      scene.remove(obj);            // Remove from scene
-      colideGroup.remove(obj);      // Remove from collision group
-      removeFromSpatialGrid(obj);
+      removeFromSpatialGrid(machine);
+      scene.remove(machine);            // Remove from scene
+      colideGroup.remove(machine);      // Remove from collision group
       break; // Stop after removing one
     }
   }
