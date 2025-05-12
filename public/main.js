@@ -7,7 +7,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 //vars------------------------------------------------
 
 
-let scene, camera, cameraHolder, renderer, UIholder, key, colideGroup, placementOutline, inventoryHolder, inventoryPanel, tree;
+let scene, camera, cameraHolder, renderer, UIholder, key, colideGroup, nearbyGroup, placementOutline, inventoryHolder, inventoryPanel, tree;
 let keys = {};
 let keyDown = false;
 
@@ -24,6 +24,7 @@ let chunkSize = 25;
 let chunkMeshes = [];
 let renderDistance = 5;
 let renderDistanceSquared = (renderDistance * chunkSize) ** 2;
+const spatialGrid = new Map();
 
 const point = new THREE.Vector3();
 const bbox = new THREE.Box3();
@@ -105,14 +106,6 @@ function init() {
   // Create a group to hold machines
   colideGroup = new THREE.Group();
   scene.add(colideGroup);
-
-  // Add machines to the group (example with cubes representing machines)
-  const machine1 = new THREE.Mesh(new THREE.BoxGeometry(50, 1, 50), new THREE.MeshStandardMaterial({ color: 0xff0000 }));
-  machine1.position.set(440, 5, 520);
-  colideGroup.add(machine1);
-
-  const machine2 = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x00ff00 }));
-  colideGroup.add(machine2);
 
   // Camera, Holder, and sky
   // Create a large inverted sphere to act as the sky
@@ -281,9 +274,10 @@ function createTrees(){
       if (randomBetween(0, 1000) <= treeSpawnRate){
         const y = getGroundLevel(x, 100, z);
         if (y > minTreeGenHeight && y < maxTreeGenHeight){
-          tree = createTree(x, y, z, randomBetween(minTreeSize, maxTreeSize));
+          tree = createTree(x, y - 1, z, randomBetween(minTreeSize, maxTreeSize));
           scene.add(tree);
           colideGroup.add(tree);
+          addGroupToSpatialGrid(tree);
         }
       }
     }
@@ -693,7 +687,9 @@ function getHighestObjectBelowY(x, maxY, z, tolerance = 0.1, group) {
   let highestY = -Infinity;
   let highestObject = null;
 
-  group.traverse((object) => {
+  const nearbyObjects = getNearbyObjects(cameraHolder.position);
+
+  nearbyObjects.traverse((object) => {
     if (!(object instanceof THREE.Mesh) || object.children.length > 0 || !object.geometry) return;
 
     if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
@@ -772,7 +768,9 @@ function checkForBlockAt(x, y, z, tolerance = 0.1) {
   let found = false;
   point.set(x, y, z);
 
-  colideGroup.traverse((obj) => {
+  const nearbyObjects = getNearbyObjects(cameraHolder.position);
+
+  nearbyObjects.traverse((obj) => {
     if (found) return;
 
     if (obj instanceof THREE.Mesh && obj.geometry && obj.children.length === 0) {
@@ -813,7 +811,111 @@ function checkForBlockAt(x, y, z, tolerance = 0.1) {
   return found;
 }
 
+function addToSpatialGrid(obj) {
+  const key = getGridKey(obj.position);
+  if (!spatialGrid.has(key)) {
+    spatialGrid.set(key, []);  // Use an array instead of a Set
+  }
+  spatialGrid.get(key).push(obj);  // Add the object to the array
+}
 
+function addGroupToSpatialGrid(group) {
+  const key = getGridKey(group.position);
+  if (!spatialGrid.has(key)) {
+    spatialGrid.set(key, []);  // Use an array instead of a Set
+  }
+  spatialGrid.get(key).push(group);  // Add the object to the array
+}
+
+
+function updateSpatialGrid(obj) {
+  removeFromSpatialGrid(obj);
+  addToSpatialGrid(obj);
+}
+
+function updateGroupInSpatialGrid(group) {
+  removeGroupFromSpatialGrid(group);
+  addGroupToSpatialGrid(group);
+}
+
+function removeFromSpatialGrid(obj) {
+  const key = getGridKey(obj.position);
+  if (spatialGrid.has(key)) {
+    spatialGrid.get(key).delete(obj);
+    if (spatialGrid.get(key).size === 0) spatialGrid.delete(key);
+  }
+}
+
+function removeGroupFromSpatialGrid(group) {
+  spatialGrid.forEach((set, key) => {
+    if (set.has(group)) {
+      set.delete(group);
+      if (set.size === 0) spatialGrid.delete(key);
+    }
+  });
+}
+
+function getGridKey(position) {
+  const x = Math.floor(position.x / chunkSize);
+  const z = Math.floor(position.z / chunkSize);
+  return `${x},${z}`;
+}
+
+function getNearbyGridCells(position) {
+  const nearbyCells = [];
+  const cameraX = Math.floor(position.x / chunkSize);
+  const cameraZ = Math.floor(position.z / chunkSize);
+
+  // Iterate over cells in a square area around the camera
+  for (let dx = -renderDistance; dx <= renderDistance; dx++) {
+    for (let dz = -renderDistance; dz <= renderDistance; dz++) {
+      const cellKey = `${cameraX + dx},${cameraZ + dz}`;
+      if (spatialGrid.has(cellKey)) {
+        nearbyCells.push(spatialGrid.get(cellKey));
+      }
+    }
+  }
+  return nearbyCells;
+}
+
+function getNearbyObjects(cameraPosition) {
+  nearbyGroup = new THREE.Group(); // Temporary group to hold nearby objects
+
+  // Get the objects in nearby cells
+  const nearbyCells = getNearbyGridCells(cameraPosition);
+
+  nearbyCells.forEach((cell) => {
+    cell.forEach((obj) => {
+      // If obj is a group, traverse it and add the children to the temporary group
+      if (obj instanceof THREE.Group) {
+        obj.traverse((child) => {
+          // If the child is close enough, add it to the nearby group
+          if (cameraPosition.distanceToSquared(child.position) < renderDistanceSquared) {
+            const clone = obj.clone();
+            nearbyGroup.add(clone); // Add the child to the nearbyGroup
+          }
+        });
+      } else {
+        // If the object is not a group, check it directly
+        if (cameraPosition.distanceToSquared(obj.position) < renderDistanceSquared) {
+          const clone = obj.clone();
+          nearbyGroup.add(clone); // Add the object to the nearbyGroup
+        }
+      }
+    });
+  });
+
+  return nearbyGroup; // Return the group of nearby objects
+}
+
+function getGroupBoundingBox(group) {
+  const box = new THREE.Box3();
+  group.children.forEach((child) => {
+    const childBox = new THREE.Box3().setFromObject(child);
+    box.expandByObject(child);  // Expands to include the child
+  });
+  return box;
+}
 
 function selectSlot(index) {
   // Reset previous slot
@@ -914,6 +1016,7 @@ function playerBreak(x, y, z){
     ) {
       scene.remove(obj);            // Remove from scene
       colideGroup.remove(obj);      // Remove from collision group
+      removeFromSpatialGrid(obj);
       break; // Stop after removing one
     }
   }
@@ -930,7 +1033,7 @@ function playerPlace(x, y, z) {
   machine.position.z = z;
   scene.add(machine);
   colideGroup.add(machine);
+  addToSpatialGrid(machine);
 }
-
 
 init();
