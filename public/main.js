@@ -7,7 +7,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 //vars------------------------------------------------
 
 
-let scene, camera, cameraHolder, renderer, UIholder, key, colideGroup, nearbyGroup, placementOutline, inventoryHolder, inventoryPanel, tree;
+let scene, camera, cameraHolder, renderer, UIholder, key, colideGroup, nearbyGroup, placementOutline, inventoryHolder, hotbarItemHolder, inventoryPanel, tree;
 let keys = {};
 let keyDown = false;
 
@@ -41,9 +41,6 @@ let terrain = [];
 let grassColor = 0x228B22;
 let grassColorVariance = 0.1;
 
-let foundationColor = 0xa9a9a9;
-let foundationColorVariance = 0.2;
-
 let treeTrunkColor = 0x8B4513;
 let treeTrunkVariance = 0.1;
 let treeLeafColor = 0x228B22;
@@ -57,10 +54,50 @@ let maxTreeGenHeight = 80;
 let playerHeight = 1.6 * 2;
 
 let selectedSlotIndex = -1;
+let slotPositions = [-0.35, -0.25, -0.15, -0.05, 0.05, 0.15, 0.25, 0.35];
+let hotbarContents = [
+  {id: "empty"},
+  {id: "empty"},
+  {id: "empty"},
+  {id: "foundation", amount: 10, placeable: true},
+  {id: "empty"},
+  {id: "empty"},
+  {id: "empty"},
+  {id: "empty"}
+];
 let hotbarSlots = [];
 let slotGlows = [];
 let UIposition = -1
 let inventoryOpen = true;
+let renderPropertys = {
+  block:{
+    sizeX: 0.04,
+    sizeY: 0.04,
+    sizeZ: 0.04,
+    offsetX: 0,
+    offsetY: 0.01,
+    offsetZ: 0.02,
+    rotationX: 35,
+    rotationY: 45,
+    rotationZ: 0,
+  }
+}
+let itemProperties = {
+  foundation: {
+    propertyType: "block",
+    color: 0xa9a9a9,
+    variance: 0
+  }
+}
+let blockProperties = {
+  foundation: {
+    sizeX: 2,
+    sizeY: 2,
+    sizeZ: 2,
+    color: 0xa9a9a9,
+    variance: 0.2
+  }
+};
 
 let interactionDistance = 5;
 let placementCorectionOffset = -1;
@@ -229,7 +266,6 @@ function createUI() {
   const glowGeometry = new THREE.CircleGeometry(0.06, 12); // slightly bigger
 
   const baseColor = 0x00d8e6;
-  const slotPositions = [-0.35, -0.25, -0.15, -0.05, 0.05, 0.15, 0.25, 0.35];
 
   for (let i = 0; i < slotPositions.length; i++) {
     const material = new THREE.MeshBasicMaterial({ color: baseColor });
@@ -265,7 +301,8 @@ function createUI() {
   inventoryPanel.position.set(0, 0, UIposition);
   inventoryHolder.add(inventoryPanel);
   UIholder.add(inventoryHolder);
-  //inventoryHolder.material.opacity = 0;
+
+  updateHotbar()
 }
 
 function createTrees(){
@@ -274,7 +311,7 @@ function createTrees(){
       if (randomBetween(0, 1000) <= treeSpawnRate){
         const y = getGroundLevel(x, 100, z);
         if (y > minTreeGenHeight && y < maxTreeGenHeight){
-          tree = createTree(x, y - 1, z, randomBetween(minTreeSize, maxTreeSize));
+          tree = createTree(x, y - 2, z, randomBetween(minTreeSize, maxTreeSize));
           scene.add(tree);
           colideGroup.add(tree);
           addGroupToSpatialGrid(tree);
@@ -500,7 +537,7 @@ function createRoundedRect(width, height, radius, depth = 0.1, material) {
 function animate() {
   requestAnimationFrame(animate);
   setPlaceOutline(cameraHolder.position.x, cameraHolder.position.y, cameraHolder.position.z, camera.rotation.x, cameraHolder.rotation.y, placementOutline);
-  player()
+  player();
   
   updateChunkVisibility();
 
@@ -511,6 +548,7 @@ function player(){
 
   if (key >= 1 && key <= 8) {
     selectSlot(key - 1);
+    key = undefined;
   }
   if (keys['KeyX']){
     if(placementOutline.visible == true){
@@ -932,6 +970,51 @@ function selectSlot(index) {
   hotbarSlots[index].position.y += 0.01;
   slotGlows[index].position.y += 0.01;
   selectedSlotIndex = index;
+  updateHotbar();
+}
+
+function updateHotbar(){
+  if (hotbarItemHolder) {
+    hotbarItemHolder.traverse((child) => {
+      scene.remove(child);
+      hotbarItemHolder.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        if (Array.isArray(child.material)) {
+          child.material.forEach((mat) => mat.dispose());
+        } else if (child.material) {
+          child.material.dispose();
+        }
+      }
+    });
+    UIholder.remove(hotbarItemHolder);
+    hotbarItemHolder = undefined;
+  }
+  hotbarItemHolder = new THREE.Object3D();
+  for(let i = 0; i < slotPositions.length; i++){
+    const itemHotbarPropertys = hotbarContents[i];
+    if(itemHotbarPropertys.id != "empty"){
+      const itemBasicProperties = itemProperties[itemHotbarPropertys.id]
+      const itemAdvancedPropertys = renderPropertys[itemBasicProperties.propertyType];
+      const item = new THREE.Mesh(
+        new THREE.BoxGeometry(itemAdvancedPropertys.sizeX, itemAdvancedPropertys.sizeY, itemAdvancedPropertys.sizeZ),
+        new THREE.MeshStandardMaterial({ color: randomizeColor(itemBasicProperties.color, itemBasicProperties.variance) })
+      );
+      
+      item.position.x = slotPositions[i] + itemAdvancedPropertys.offsetX;
+      item.position.y = -0.6 + itemAdvancedPropertys.offsetY;
+      item.position.z = UIposition + itemAdvancedPropertys.offsetZ;
+      item.rotation.x = itemAdvancedPropertys.rotationX;
+      item.rotation.y = itemAdvancedPropertys.rotationY;
+      item.rotation.z = itemAdvancedPropertys.rotationZ;
+      hotbarItemHolder.add(item);
+      if (i == selectedSlotIndex){
+        item.scale.set(1.2, 1.2, 1.2);
+        item.position.y += 0.01;
+      }
+    }
+  }
+  UIholder.add(hotbarItemHolder);
 }
 
 function showInventory(){
@@ -996,8 +1079,11 @@ function playerLeftClick() {
     placement.y = groundLevel;
   }
 
-  if (!checkForBlockAt(placement.x, placement.y, placement.z)){
-    playerPlace(placement.x, placement.y, placement.z);
+  if (!checkForBlockAt(placement.x, placement.y, placement.z) && hotbarContents[selectedSlotIndex].id != "empty"){
+    if(hotbarContents[selectedSlotIndex].placeable){
+      playerPlace(placement.x, placement.y, placement.z, hotbarContents[selectedSlotIndex].id);
+      hotbarContents[selectedSlotIndex].amount -= 1;
+    }
   }
 }
 
@@ -1022,10 +1108,11 @@ function playerBreak(x, y, z){
   }
 }
 
-function playerPlace(x, y, z) {
+function playerPlace(x, y, z, type) {
+  const thing = blockProperties[type];
   const machine = new THREE.Mesh(
-    new THREE.BoxGeometry(2, 2, 2),
-    new THREE.MeshStandardMaterial({ color: randomizeColor(foundationColor, foundationColorVariance) })
+    new THREE.BoxGeometry(thing.sizeX, thing.sizeY, thing.sizeZ),
+    new THREE.MeshStandardMaterial({ color: randomizeColor(thing.color, thing.variance) })
   );
 
   machine.position.x = x;
