@@ -20,6 +20,7 @@ let yVelocity = 0;
 let onGround = false;
 
 let gridSize = 1000;
+let worldSize = 1000000
 let chunkSize = 25;
 let chunkMeshes = [];
 let renderDistance = 5;
@@ -37,6 +38,7 @@ let lightStrenth = 1;
 let elevation = 2; 
 let terrainScale = 0.05;
 let terrain = [];
+let populationData = [];
 
 let grassColor = 0x228B22;
 let grassColorVariance = 0.1;
@@ -140,15 +142,15 @@ function init() {
   scene.add(light1);
 
   const light2 = new THREE.AmbientLight(lightColor, lightStrenth);
-  light2.position.set(gridSize, 100, 0);
+  light2.position.set(worldSize, 100, 0);
   scene.add(light2);
 
   const light3 = new THREE.AmbientLight(lightColor, lightStrenth);
-  light3.position.set(gridSize, 100, gridSize);
+  light3.position.set(worldSize, 100, worldSize);
   scene.add(light3);
 
   const light4 = new THREE.AmbientLight(lightColor, lightStrenth);
-  light4.position.set(0, 100, gridSize);
+  light4.position.set(0, 100, worldSize);
   scene.add(light4);
 
   createGround();
@@ -159,7 +161,7 @@ function init() {
 
   // Camera, Holder, and sky
   // Create a large inverted sphere to act as the sky
-  const skyGeometry = new THREE.SphereGeometry(gridSize * 1, 8, 8);
+  const skyGeometry = new THREE.SphereGeometry(worldSize * 1, 8, 8);
   const skyMaterial = new THREE.MeshBasicMaterial({
     map: skyTexture,        // Apply the night sky texture
     side: THREE.BackSide,   // Render the inside of the sphere
@@ -167,13 +169,13 @@ function init() {
     transparent: true       // Allow transparency if needed
   });
   const sky = new THREE.Mesh(skyGeometry, skyMaterial);
-  sky.position.set(gridSize / 2, 0, gridSize / 2);
+  sky.position.set(worldSize / 2, 0, worldSize / 2);
   scene.add(sky);
 
   createUI();
   createTrees();
 
-  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, gridSize * 2.1);
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, worldSize * 2.1);
   
   cameraHolder = new THREE.Object3D();
   cameraHolder.add(camera);
@@ -332,17 +334,10 @@ function createUI() {
 }
 
 function createTrees(){
-  for (let x = 0; x < gridSize; x++){
-    for (let z = 0; z < gridSize; z++){
-      if (randomBetween(0, 1000) <= treeSpawnRate){
-        const y = getGroundLevel(x, 100, z);
-        if (y > minTreeGenHeight && y < maxTreeGenHeight){
-          tree = createTree(x, y - 2, z, randomBetween(minTreeSize, maxTreeSize));
-          scene.add(tree);
-          colideGroup.add(tree);
-          addGroupToSpatialGrid(tree);
-        }
-      }
+  for (let chunkX = 0; chunkX < gridSize; chunkX += chunkSize) {
+    for (let chunkZ = 0; chunkZ < gridSize; chunkZ += chunkSize) {
+      createChunkPopulationData(chunkX, chunkZ);
+      populateChunk(chunkX, chunkZ)
     }
   }
 }
@@ -377,9 +372,9 @@ function createTree(x, y, z, size = 1) {
 
 function createGround() {
   // Generate terrain heights
-  for (let x = 0; x < gridSize; x++) {
+  for (let x = 0; x < gridSize + 1; x++) {
     terrain[x] = [];
-    for (let z = 0; z < gridSize; z++) {
+    for (let z = 0; z < gridSize + 1; z++) {
       terrain[x][z] = pseudoNoise(x, z);
     }
   }
@@ -392,8 +387,8 @@ function createGround() {
       const colors = [];
       let vertexIndex = 0;
 
-      for (let x = chunkX; x < Math.min(chunkX + chunkSize, gridSize - 1); x++) {
-        for (let z = chunkZ; z < Math.min(chunkZ + chunkSize, gridSize - 1); z++) {
+      for (let x = chunkX; x < chunkX + chunkSize; x++) {
+        for (let z = chunkZ; z < chunkZ + chunkSize; z++) {
           const v0 = [x, terrain[x][z], z];
           const v1 = [x + 1, terrain[x + 1][z], z];
           const v2 = [x + 1, terrain[x + 1][z + 1], z + 1];
@@ -434,6 +429,99 @@ function createGround() {
       scene.add(chunkMesh);
       chunkMeshes.push(chunkMesh);
 
+    }
+  }
+}
+
+function createChunkData(chunkX, chunkZ){
+  for (let x = chunkX; x < chunkX + chunkSize + 1; x++) {
+    if (!terrain[x]){
+      terrain[x] = [];
+    }
+    for (let z = chunkZ; z < chunkZ + chunkSize + 1; z++) {
+      if (terrain[x][z] == null){
+        terrain[x][z] = pseudoNoise(x, z);
+      }
+    }
+  }
+}
+
+function createChunk(chunkX, chunkZ){
+  const positions = [];
+  const indices = [];
+  const colors = [];
+  let vertexIndex = 0;
+
+  for (let x = chunkX; x < chunkX + chunkSize; x++) {
+    for (let z = chunkZ; z < chunkZ + chunkSize; z++) {
+      const v0 = [x, terrain[x][z], z];
+      const v1 = [x + 1, terrain[x + 1][z], z];
+      const v2 = [x + 1, terrain[x + 1][z + 1], z + 1];
+      const v3 = [x, terrain[x][z + 1], z + 1];
+
+      positions.push(...v0, ...v1, ...v2, ...v3);
+
+      const quadColor = randomizeColor(grassColor, grassColorVariance);
+      for (let i = 0; i < 4; i++) {
+        colors.push(quadColor.r, quadColor.g, quadColor.b);
+      }
+
+      indices.push(
+        vertexIndex, vertexIndex + 1, vertexIndex + 2,
+        vertexIndex + 2, vertexIndex + 3, vertexIndex
+      );
+
+      vertexIndex += 4;
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    flatShading: false,
+    side: THREE.DoubleSide
+  });
+
+  const chunkMesh = new THREE.Mesh(geometry, material);
+  chunkMesh.position.set(chunkX, 0, chunkZ); // ⬅️ key fix
+  geometry.translate(-chunkX, 0, -chunkZ);   // ⬅️ correct for local-space vertices
+
+  scene.add(chunkMesh);
+  chunkMeshes.push(chunkMesh);
+}
+
+function createChunkPopulationData(chunkX, chunkZ){
+  for (let x = chunkX; x < chunkX + chunkSize + 1; x++) {
+    if (!populationData[x]){
+      populationData[x] = [];
+    }
+    for (let z = chunkZ; z < chunkZ + chunkSize + 1; z++) {
+      if (populationData[x][z] == null){
+        if (randomBetween(0, 1000) <= treeSpawnRate){
+          const y = terrain[x][z];
+          if (y > minTreeGenHeight && y < maxTreeGenHeight){
+            populationData[x][z] = createTree(x, y - 2, z, randomBetween(minTreeSize, maxTreeSize));
+          }
+        }
+      }
+    }
+  }
+}
+
+function populateChunk(chunkX, chunkZ){
+  for (let x = chunkX; x < chunkX + chunkSize; x++) {
+    for (let z = chunkZ; z < chunkZ + chunkSize; z++) {
+      if (populationData[x][z] != null){
+        tree = populationData[x][z];
+        scene.add(tree);
+        colideGroup.add(tree);
+        addGroupToSpatialGrid(tree);
+      }
     }
   }
 }
@@ -695,12 +783,12 @@ function player(){
     }
     if(cameraHolder.position.x < 0.5){
       cameraHolder.position.x = 0.5;
-    }else if (cameraHolder.position.x > gridSize - 1.5){
-      cameraHolder.position.x = gridSize - 1.5;
+    }else if (cameraHolder.position.x > worldSize - 1.5){
+      cameraHolder.position.x = worldSize - 1.5;
     }else if (cameraHolder.position.z < 0.5){
       cameraHolder.position.z = 0.5;
-    }else if (cameraHolder.position.z > gridSize - 1.5){
-      cameraHolder.position.z = gridSize - 1.5;
+    }else if (cameraHolder.position.z > worldSize - 1.5){
+      cameraHolder.position.z = worldSize - 1.5;
     }else{
       cameraHolder.position.y += yVelocity;
       return;
@@ -717,8 +805,8 @@ function getGroundLevel(x, y, z, colideWithOtherObjects = false) {
   const z1 = z0 + 1;
 
   if (
-    x0 < 0 || x1 >= terrain.length ||
-    z0 < 0 || z1 >= terrain[0].length
+    x0 < 0 || x1 >= worldSize ||
+    z0 < 0 || z1 >= worldSize
   ) {
     return 0; // Out of bounds
   }
@@ -807,6 +895,17 @@ function getHighestObjectBelowY(x, maxY, z, tolerance = 0.1, group) {
 
 function updateChunkVisibility() {
   const playerPos = cameraHolder.position;
+  const playerChunkX = Math.floor(playerPos.x / chunkSize);
+  const playerChunkZ = Math.floor(playerPos.z / chunkSize);
+
+  // Create or update visible chunks
+  for (let dx = -renderDistance * chunkSize; dx < renderDistance * chunkSize; dx += chunkSize) {
+    for (let dz = -renderDistance * chunkSize; dz < renderDistance * chunkSize; dz += chunkSize) {
+      const chunkX = playerChunkX * chunkSize + dx;
+      const chunkZ = playerChunkZ * chunkSize + dz;
+      checkIfChunkExist(chunkX, chunkZ);
+    }
+  }
 
   for (const chunk of chunkMeshes) {
     const geom = chunk.geometry;
@@ -874,6 +973,23 @@ function checkForBlockAt(x, y, z, tolerance = 0.1) {
   });
 
   return found;
+}
+
+function checkIfChunkExist(chunkX, chunkZ){
+  try{
+    if (!terrain[chunkX + 1] || terrain[chunkX + 1][chunkZ + 1] == null) {
+      try{
+      createChunkData(chunkX, chunkZ);
+      createChunk(chunkX, chunkZ);
+      createChunkPopulationData(chunkX, chunkZ);
+      populateChunk(chunkX, chunkZ);
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+  } catch (error) {
+    alert(error.message);
+  }
 }
 
 function addToSpatialGrid(obj) {
