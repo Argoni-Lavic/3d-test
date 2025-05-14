@@ -415,7 +415,22 @@ function createChunkData(chunkX, chunkZ){
   for (let x = chunkX; x < chunkX + chunkSize + 1; x++) {
     for (let z = chunkZ; z < chunkZ + chunkSize + 1; z++) {
       if (getJson2dListData("worldData.chunkData.terrain", x, z) == null){
-        addJson2dListData("worldData.chunkData.terrain", x, z, pseudoNoise(x, z));
+        let temp = elevationPseudoNoise(x, z, 0.005, 0.05);
+        if (temp <= 0){
+          temp = 0.1
+        }
+        addJson2dListData("worldData.chunkData.temprature", x, z, tempraturePseudoNoise(x, z, 0.01, 10));
+        temp = elevationPseudoNoise(x, z, 0.005, temp);
+        if (temp <= 1){
+          temp = 1
+        }
+        temp * 0.1;
+        addJson2dListData("worldData.chunkData.elevation", x, z, temp);
+        temp = terrainPseudoNoise(x, z, temp);
+        if (temp < 0){
+          temp = Math.pow(Math.abs(temp), 0.9) * -1;
+        }
+        addJson2dListData("worldData.chunkData.terrain", x, z, temp);
       }
     }
   }
@@ -436,7 +451,7 @@ function createChunk(chunkX, chunkZ){
 
       positions.push(...v0, ...v1, ...v2, ...v3);
 
-      const quadColor = randomizeColor(grassColor, grassColorVariance);
+      const quadColor = getTerrainColor(x, z);
       for (let i = 0; i < 4; i++) {
         colors.push(quadColor.r, quadColor.g, quadColor.b);
       }
@@ -499,6 +514,34 @@ function populateChunk(chunkX, chunkZ){
   }
 }
 
+function getTerrainColor(x, z){
+  const y = getJson2dListData("worldData.chunkData.terrain", x, z);
+  const temprature = getJson2dListData("worldData.chunkData.temprature", x, z);
+  if (y <= 0){
+    if (temprature > 40){
+      return randomizeColor(0xdecaac, 0.1);
+    }else{
+      return randomizeColor(0x324a5f, 0.1);
+    }
+  }else if (y > 0 && y <= 10){
+    if (temprature > 40){
+      return randomizeColor(0xc2b280, 0.1);
+    }else{
+      return randomizeColor(0xb49cac, 0.1);
+    }
+  }else if (y > 10 && y <= 100){
+    if (temprature > 80){
+      return randomizeColor(0x228B22, 0.1);
+    }else if (temprature > 40){
+      return randomizeColor(0x475359, 0.1);
+    }else{
+      return randomizeColor(0xfffafa, 0.1);
+    }
+  }else{
+    return randomizeColor(0xfffafa, 0.1);
+  }
+}
+
 function randomizeColor(hex, variance = 0.1) {
   const base = new THREE.Color(hex);
   const hsl = {};
@@ -508,6 +551,35 @@ function randomizeColor(hex, variance = 0.1) {
   hsl.l += (Math.random() - 0.5) * variance;
   return new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
 }
+
+function randomizeRGBColor(rgb, variance = 0.1) {
+  // Unpack RGB values
+  let [r, g, b] = rgb;
+
+  // Normalize to [0, 1] for Three.js
+  r /= 255;
+  g /= 255;
+  b /= 255;
+
+  // Create the base color
+  const base = new THREE.Color(r, g, b);
+  const hsl = {};
+  base.getHSL(hsl);
+
+  // Randomize the HSL values with given variance
+  hsl.h += (Math.random() - 0.5) * variance;
+  hsl.s += (Math.random() - 0.5) * variance;
+  hsl.l += (Math.random() - 0.5) * variance;
+
+  // Clamp values between 0 and 1
+  hsl.h = Math.min(Math.max(hsl.h, 0), 1);
+  hsl.s = Math.min(Math.max(hsl.s, 0), 1);
+  hsl.l = Math.min(Math.max(hsl.l, 0), 1);
+
+  // Return the new color
+  return new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
+}
+
 
 function randomBetween(min, max) {
   return Math.random() * (max - min) + min;
@@ -551,14 +623,36 @@ function interpolatedNoise(x, z, scale) {
   return value * elevation;
 }
 
-function pseudoNoise(x, z) {
-  const temprature = 1;
-  const scaleFactor = 1;
+function terrainPseudoNoise(x, z, terrainElevationModifyer = 1, terrainHeightModifyer = 0) {
   return( 
-    interpolatedNoise(x, z, terrainScale / 3) * elevation -
-    interpolatedNoise(z, x, terrainScale / 100) * elevation +
-    interpolatedNoise(x, z, terrainScale / 10) * elevation * 10 -
-    interpolatedNoise(x, z, terrainScale / 1000) * elevation * 100
+    interpolatedNoise(x, z, terrainScale / 3) * elevation * terrainElevationModifyer -
+    interpolatedNoise(z, x, terrainScale / 100) * elevation * terrainElevationModifyer +
+    interpolatedNoise(x, z, terrainScale / 10) * elevation * 10 * terrainElevationModifyer -
+    interpolatedNoise(z, x, terrainScale / 1000) * elevation * 100 * terrainElevationModifyer +
+    interpolatedNoise(x, z, terrainScale / 3000) * elevation * 10 * terrainElevationModifyer -
+    interpolatedNoise(z, x, terrainScale / 100000) * elevation * 10 * terrainElevationModifyer +
+    interpolatedNoise(x, z, terrainScale / 10000) * elevation * 100 * terrainElevationModifyer -
+    interpolatedNoise(z, x, terrainScale / 1000000) * elevation * 1000 * terrainElevationModifyer +
+    terrainHeightModifyer
+  ); // adjust 40 for terrain height
+}
+
+function tempraturePseudoNoise(x, z, tempratureChangeRateModifyer, tempratureScaleModifyer = 1) {
+  return( 
+    interpolatedNoise(x, z, tempratureChangeRateModifyer / 3) * elevation * tempratureScaleModifyer -
+    interpolatedNoise(z, x, tempratureChangeRateModifyer / 100) * elevation * tempratureScaleModifyer +
+    interpolatedNoise(x, z, tempratureChangeRateModifyer / 10) * elevation * 10 * tempratureScaleModifyer -
+    interpolatedNoise(x, z, tempratureChangeRateModifyer / 1000) * elevation * 100 * tempratureScaleModifyer
+  ); // adjust 40 for terrain height
+}
+
+function elevationPseudoNoise(x, z, elevationChangeRateModifyer, elevationScaleModifyer = 1, elevationScaleOffset = 0) {
+  return( 
+    interpolatedNoise(x, z, elevationChangeRateModifyer / 3) * elevation * elevationScaleModifyer -
+    interpolatedNoise(z, x, elevationChangeRateModifyer / 100) * elevation * elevationScaleModifyer +
+    interpolatedNoise(x, z, elevationChangeRateModifyer / 10) * elevation * 10 * elevationScaleModifyer -
+    interpolatedNoise(x, z, elevationChangeRateModifyer / 1000) * elevation * 100 * elevationScaleModifyer +
+    elevationScaleOffset
   ); // adjust 40 for terrain height
 }
 
@@ -869,15 +963,18 @@ function getHighestObjectBelowY(x, maxY, z, tolerance = 0.1, group) {
 }
 
 let lastChunkX = null;
+let lastChunkY = null;
 let lastChunkZ = null;
 
 function updateChunkVisibility(playerPos = cameraHolder.position) {
   const playerChunkX = Math.floor(playerPos.x / chunkSize);
+  const playerChunkY = Math.floor(playerPos.y / chunkSize);
   const playerChunkZ = Math.floor(playerPos.z / chunkSize);
 
   // Only update if player moved to a new chunk
-  if (playerChunkX === lastChunkX && playerChunkZ === lastChunkZ) return;
+  if (playerChunkX === lastChunkX && playerChunkY === lastChunkY && playerChunkZ === lastChunkZ) return;
   lastChunkX = playerChunkX;
+  lastChunkY = playerChunkY;
   lastChunkZ = playerChunkZ;
 
   // Create or update visible chunks (only around the player)
@@ -888,6 +985,10 @@ function updateChunkVisibility(playerPos = cameraHolder.position) {
       addMissingChunks(chunkX, chunkZ);
     }
   }
+
+  const temp = playerPos.y;
+
+  playerPos.y = 0;
 
   // Update chunk visibility
   for (const chunk of chunkMeshes) {
@@ -919,6 +1020,7 @@ function updateChunkVisibility(playerPos = cameraHolder.position) {
     const distSquared = playerPos.distanceToSquared(center);
     object.visible = distSquared < renderDistanceSquared;
   });
+  playerPos.y = temp;
 }
 
 
