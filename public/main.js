@@ -145,23 +145,24 @@ let skyTexture = textureLoader.load('https://images.unsplash.com/photo-157028461
 
 
 function init() {
-  if (loadJsonData()){
-    if (gameData.playerData.hotbar != null){
-      hotbarContents = gameData.playerData.hotbar;
-    }else{
-      gameData.playerData.hotbar = [
-        {id: "empty"},
-        {id: "empty"},
-        {id: "empty"},
-        {id: "pineFoundation", amount: 10, placeable: true},
-        {id: "empty"},
-        {id: "empty"},
-        {id: "empty"},
-        {id: "empty"}
-      ];
+  try {
+    if (loadJsonData()){
+      if (gameData.playerData.hotbar == null && gameData.playerData.hotbar.length != 8){
+        gameData.playerData.hotbar = [
+          {id: "empty"},
+          {id: "empty"},
+          {id: "empty"},
+          {id: "pineFoundation", amount: 10, placeable: true},
+          {id: "empty"},
+          {id: "empty"},
+          {id: "empty"},
+          {id: "empty"}
+        ];
+      }
     }
+  } catch (error) {
+    alert("save loading error; " + error.message)
   }
-
   // Scene and Renderer
   scene = new THREE.Scene();
   renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -185,7 +186,11 @@ function init() {
   light4.position.set(0, 100, worldSize);
   scene.add(light4);
 
+  try{
   createGround();
+  } catch (error) {
+    alert("world building error; " + error.message)
+  }
 
   // Create a group to hold machines
   colideGroup = new THREE.Group();
@@ -204,8 +209,12 @@ function init() {
   sky.position.set(worldSize / 2, 0, worldSize / 2);
   scene.add(sky);
 
+  try{
   createUI();
-  createTrees();
+  } catch (error) {
+    alert("ui building error; " + error.message)
+  }
+  //createTrees();
 
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, worldSize * 2.1);
   
@@ -280,8 +289,11 @@ function init() {
     keys[e.code] = false;
   });
   
-
-  animate();
+  try {
+    animate();
+  } catch (error) {
+    alert("run error; " + error.message);
+  }
 }
 
 function onMouseMove(e) {
@@ -362,7 +374,7 @@ function createUI() {
   inventoryHolder.add(inventoryPanel);
   UIholder.add(inventoryHolder);
 
-  updateHotbar()
+  updateHotbar();
 }
 
 function createTrees(){
@@ -1324,7 +1336,7 @@ function updateHotbar(){
   }
   hotbarItemHolder = new THREE.Object3D();
   for(let i = 0; i < slotPositions.length; i++){
-    const itemHotbarPropertys = hotbarContents[i];
+    const itemHotbarPropertys = gameData.playerData.hotbar[i];
     if(itemHotbarPropertys.id != "empty"){
       const itemBasicProperties = itemProperties[itemHotbarPropertys.id]
       const itemAdvancedPropertys = renderPropertys[itemBasicProperties.propertyType];
@@ -1415,10 +1427,10 @@ function playerLeftClick() {
     placement.y = groundLevel;
   }
 
-  if (!checkForBlockAt(placement.x, placement.y, placement.z) && hotbarContents[selectedSlotIndex].id != "empty"){
-    if(hotbarContents[selectedSlotIndex].placeable){
-      playerPlace(placement.x, placement.y, placement.z, hotbarContents[selectedSlotIndex].id);
-      hotbarContents[selectedSlotIndex].amount -= 1;
+  if (!checkForBlockAt(placement.x, placement.y, placement.z) && gameData.playerData.hotbar[selectedSlotIndex].id != "empty"){
+    if(gameData.playerData.hotbar[selectedSlotIndex].placeable){
+      playerPlace(placement.x, placement.y, placement.z, gameData.playerData.hotbar[selectedSlotIndex].id);
+      gameData.playerData.hotbar[selectedSlotIndex].amount -= 1;
     }
   }
 }
@@ -1462,5 +1474,5 @@ function playerPlace(x, y, z, type) {
 try{
 init();
 }catch(error){
-  alert(error.message);
+  alert("start error; " + error.message);
 }
