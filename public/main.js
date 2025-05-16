@@ -380,7 +380,6 @@ function createUI() {
 function createTrees(){
   for (let chunkX = 0; chunkX < gridSize; chunkX += chunkSize) {
     for (let chunkZ = 0; chunkZ < gridSize; chunkZ += chunkSize) {
-      createChunkPopulationData(chunkX, chunkZ);
       populateChunk(chunkX, chunkZ)
     }
   }
@@ -429,16 +428,16 @@ function createChunkData(chunkX, chunkZ){
       if (getJson2dListData("worldData.chunkData.terrain", x, z) == null){
         let temp = elevationPseudoNoise(x, z, 0.005, 0.05);
         if (temp <= 0){
-          temp = 0.1
+          temp = 0.1;
         }
         addJson2dListData("worldData.chunkData.temprature", x, z, tempraturePseudoNoise(x, z, 0.01, 10));
         temp = elevationPseudoNoise(x, z, 0.005, temp);
         if (temp <= 1){
           temp = 1
         }
-        temp * 0.1;
+        temp *= 0.2;
         addJson2dListData("worldData.chunkData.elevation", x, z, temp);
-        temp = terrainPseudoNoise(x, z, temp);
+        temp = terrainPseudoNoise(x, z, temp, 10);
         if (temp < 0){
           temp = Math.pow(Math.abs(temp), 0.9) * -1;
         }
@@ -499,15 +498,11 @@ function createChunk(chunkX, chunkZ){
   addJson2dListData("worldData.chunkData.chunks", chunkX, chunkZ, chunkMesh);
 }
 
-function createChunkPopulationData(chunkX, chunkZ){
-  for (let x = chunkX; x < chunkX + chunkSize + 1; x++) {
-    for (let z = chunkZ; z < chunkZ + chunkSize + 1; z++) {
-      if (randomBetween(0, 1000) <= treeSpawnRate){
-        const y = getJson2dListData("worldData.chunkData.terrain", x, z);
-        if (y > minTreeGenHeight && y < maxTreeGenHeight){
-          addJson2dListData("worldData.chunkData.population", x, z, createTree(x, y - 2, z, randomBetween(minTreeSize, maxTreeSize)));
-        }
-      }
+function createChunkPopulationData(x, z){
+  if (randomBetween(0, 1000) <= treeSpawnRate){
+    const y = getJson2dListData("worldData.chunkData.terrain", x, z);
+    if (y > minTreeGenHeight && y < maxTreeGenHeight){
+      addJson2dListData("worldData.chunkData.population", x, z, createTree(x, y - 2, z, randomBetween(minTreeSize, maxTreeSize)));
     }
   }
 }
@@ -527,30 +522,40 @@ function populateChunk(chunkX, chunkZ){
 }
 
 function getTerrainColor(x, z){
-  const y = getJson2dListData("worldData.chunkData.terrain", x, z);
+  const y00 = getJson2dListData("worldData.chunkData.terrain", x, z);
+  const y10 = getJson2dListData("worldData.chunkData.terrain", x + 1, z);
+  const y11 = getJson2dListData("worldData.chunkData.terrain", x + 1, z + 1);
+  const y01 = getJson2dListData("worldData.chunkData.terrain", x, z + 1);
+
+  const dy = Math.max(y00 - y11, y11 - y00, y10 - y01, y01 - y10);
+
   const temprature = getJson2dListData("worldData.chunkData.temprature", x, z);
-  if (y <= 0){
-    if (temprature > 40){
-      return randomizeColor(0xdecaac, 0.1);
+  if (y00 <= 0){
+    if (temprature > 40 && dy < 1){
+      return randomizeColor(0xdecaac, 0.1); //ocean floor sand
     }else{
-      return randomizeColor(0x324a5f, 0.1);
+      return randomizeColor(0x324a5f, 0.1); //ocean floor stone
     }
-  }else if (y > 0 && y <= 10){
-    if (temprature > 40){
-      return randomizeColor(0xc2b280, 0.1);
+  }else if (y00 > 0 && y00 <= 10){
+    if (temprature > 40 && dy < 1){
+      return randomizeColor(0xc2b280, 0.1); //beach sand
     }else{
-      return randomizeColor(0xb49cac, 0.1);
+      return randomizeColor(0xb49cac, 0.1); //stone
     }
-  }else if (y > 10 && y <= 100){
-    if (temprature > 80){
-      return randomizeColor(0x228B22, 0.1);
-    }else if (temprature > 40){
-      return randomizeColor(0x475359, 0.1);
+  }else if (y00 > 10 && y00 <= 100){
+    if (temprature > 40 && dy < 1){
+      createChunkPopulationData(x, z);
+      return randomizeColor(0x228B22, 0.1); //grass
+    }else if (dy > 1){
+      return randomizeColor(0xb49cac, 0.1); //stone
     }else{
-      return randomizeColor(0xfffafa, 0.1);
+      createChunkPopulationData(x, z);
+      return randomizeColor(0xfffafa, 0.1); //snow
     }
+  }else if (dy < 1){
+    return randomizeColor(0xfffafa, 0.1); //snow
   }else{
-    return randomizeColor(0xfffafa, 0.1);
+    return randomizeColor(0xb49cac, 0.1); //stone
   }
 }
 
@@ -635,7 +640,7 @@ function interpolatedNoise(x, z, scale) {
   return value * elevation;
 }
 
-function terrainPseudoNoise(x, z, terrainElevationModifyer = 1, terrainHeightModifyer = 0) {
+function terrainPseudoNoise(x, z, terrainElevationModifyer, terrainHeightModifyer = 0) {
   return( 
     interpolatedNoise(x, z, terrainScale / 3) * elevation * terrainElevationModifyer -
     interpolatedNoise(z, x, terrainScale / 100) * elevation * terrainElevationModifyer +
@@ -1090,7 +1095,6 @@ function addMissingChunks(chunkX, chunkZ){
       try{
       createChunkData(chunkX, chunkZ);
       createChunk(chunkX, chunkZ);
-      createChunkPopulationData(chunkX, chunkZ);
       populateChunk(chunkX, chunkZ);
       } catch (error) {
         alert(error.message);
