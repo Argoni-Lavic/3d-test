@@ -426,7 +426,7 @@ function createChunkData(chunkX, chunkZ){
   for (let x = chunkX; x < chunkX + chunkSize + 1; x++) {
     for (let z = chunkZ; z < chunkZ + chunkSize + 1; z++) {
       if (getJson2dListData("worldData.chunkData.terrain", x, z) == null){
-        let temp = elevationPseudoNoise(x, z, 0.005, 0.05);
+        let temp = elevationPseudoNoise(x, z, 0.005, 0.02);
         if (temp <= 0){
           temp = 0.1;
         }
@@ -455,6 +455,7 @@ function createChunk(chunkX, chunkZ){
 
   for (let x = chunkX; x < chunkX + chunkSize; x++) {
     for (let z = chunkZ; z < chunkZ + chunkSize; z++) {
+      const quadColor = getTerrainColor(x, z);
       const v0 = [x, getJson2dListData("worldData.chunkData.terrain", x, z), z];
       const v1 = [x + 1, getJson2dListData("worldData.chunkData.terrain", x + 1, z), z];
       const v2 = [x + 1, getJson2dListData("worldData.chunkData.terrain", x + 1, z + 1), z + 1];
@@ -462,7 +463,6 @@ function createChunk(chunkX, chunkZ){
 
       positions.push(...v0, ...v1, ...v2, ...v3);
 
-      const quadColor = getTerrainColor(x, z);
       for (let i = 0; i < 4; i++) {
         colors.push(quadColor.r, quadColor.g, quadColor.b);
       }
@@ -1476,7 +1476,7 @@ function playerPlace(x, y, z, type) {
 }
 
 try{
-init();
+  init();
 }catch(error){
   alert("start error; " + error.message);
 }
